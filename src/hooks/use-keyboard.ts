@@ -12,6 +12,7 @@ const toolKeyMap: Record<string, Tool> = {
   p: 'pencil',
   t: 'text',
   h: 'pan',
+  k: 'laser',
 }
 
 export interface ClipboardActions {

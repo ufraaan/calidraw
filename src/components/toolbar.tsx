@@ -19,6 +19,7 @@ import {
   IconPencil,
   IconText,
   IconPan,
+  IconLaser,
 } from './ui/icons'
 import { ColorPicker } from './color-picker'
 
@@ -31,6 +32,7 @@ const tools: { tool: Tool; label: string; icon: ReactNode; shortcut: string }[] 
   { tool: 'line', label: 'Line', icon: <IconLine />, shortcut: 'L' },
   { tool: 'pencil', label: 'Pencil', icon: <IconPencil />, shortcut: 'P' },
   { tool: 'text', label: 'Text', icon: <IconText />, shortcut: 'T' },
+  { tool: 'laser', label: 'Laser', icon: <IconLaser />, shortcut: 'K' },
   { tool: 'pan', label: 'Pan', icon: <IconPan />, shortcut: 'H' },
 ]
 

@@ -44,6 +44,7 @@ export type Tool =
   | 'pencil'
   | 'text'
   | 'pan'
+  | 'laser'
 
 export interface Bounds {
   minX: number

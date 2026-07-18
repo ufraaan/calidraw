@@ -44,6 +44,23 @@ export function updateDrawing(point: Point): Partial<Element> | null {
     }
   }
 
+  if (state.tool === 'laser') {
+    return {
+      type: 'line',
+      strokeColor: '#ef4444',
+      backgroundColor: 'transparent',
+      strokeWidth: 2,
+      strokeStyle: 'solid' as const,
+      roughness: 0,
+      opacity: 70,
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      points: [{ ...drawState.points[0] }, { ...point }],
+    }
+  }
+
   const base: Partial<Element> = {
     strokeColor: state.strokeColor,
     backgroundColor: state.backgroundColor,
@@ -159,5 +176,5 @@ export function endDrawing(): Element | null {
 }
 
 export function isShapeTool(tool: Tool): boolean {
-  return ['rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'pencil'].includes(tool)
+  return ['rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'pencil', 'laser'].includes(tool)
 }

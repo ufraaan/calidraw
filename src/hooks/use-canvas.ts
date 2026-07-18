@@ -23,6 +23,7 @@ const TOOL_CURSOR: Record<string, string> = {
   pencil: 'crosshair',
   text: 'text',
   pan: 'grab',
+  laser: 'crosshair',
 }
 
 const RESIZE_CURSOR: Record<ResizeHandle, string> = {
@@ -574,6 +575,13 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         dragIdsRef.current = new Set()
         transientRef.current = []
         if (moved.length > 0) onElementsUpdate(moved)
+        return
+      }
+
+      // Laser pointer — never commits to elements
+      if (tool === 'laser') {
+        transientRef.current = []
+        scheduleDraw()
         return
       }
 
