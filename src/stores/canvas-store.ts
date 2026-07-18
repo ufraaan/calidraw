@@ -1,6 +1,8 @@
 import { createStore } from '@tanstack/react-store'
 import type { Tool } from '../types'
 
+export type SaveStatus = 'idle' | 'saving' | 'saved'
+
 export interface CanvasState {
   tool: Tool
   zoom: number
@@ -13,6 +15,7 @@ export interface CanvasState {
   opacity: number
   roughness: number
   selectedIds: string[]
+  saveStatus: SaveStatus
 }
 
 const POV_KEY = 'calidraw-pov'
@@ -41,6 +44,7 @@ const initialState: CanvasState = {
   opacity: 100,
   roughness: 1,
   selectedIds: [],
+  saveStatus: 'idle',
 }
 
 export const canvasStore = createStore(initialState)
@@ -95,4 +99,45 @@ export function setOpacity(opacity: number) {
 
 export function setSelectedIds(ids: string[]) {
   canvasStore.setState((s) => ({ ...s, selectedIds: ids }))
+}
+
+// ── Smooth zoom animation ────────────────────────────────────
+let zoomAnimation: number | null = null
+
+export function animateZoom(targetZoom: number, cx?: number, cy?: number) {
+  const startZoom = canvasStore.state.zoom
+  const clampedTarget = Math.max(0.1, Math.min(5, targetZoom))
+  const startTime = performance.now()
+  const duration = 150
+
+  if (zoomAnimation) cancelAnimationFrame(zoomAnimation)
+
+  function animate(time: number) {
+    const t = Math.min((time - startTime) / duration, 1)
+    const ease = 1 - Math.pow(1 - t, 3) // ease-out cubic
+    const currentZoom = startZoom + (clampedTarget - startZoom) * ease
+    zoomAtPoint(currentZoom, cx, cy)
+
+    if (t < 1) {
+      zoomAnimation = requestAnimationFrame(animate)
+    } else {
+      zoomAnimation = null
+    }
+  }
+
+  zoomAnimation = requestAnimationFrame(animate)
+}
+
+// ── Auto-save indicator ──────────────────────────────────────
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
+export function triggerSaveStatus() {
+  canvasStore.setState((s) => ({ ...s, saveStatus: 'saving' as SaveStatus }))
+  if (saveTimeout) clearTimeout(saveTimeout)
+  saveTimeout = setTimeout(() => {
+    canvasStore.setState((s) => ({ ...s, saveStatus: 'saved' as SaveStatus }))
+    setTimeout(() => {
+      canvasStore.setState((s) => ({ ...s, saveStatus: 'idle' as SaveStatus }))
+    }, 1200)
+  }, 300)
 }

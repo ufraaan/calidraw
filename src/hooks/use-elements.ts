@@ -56,6 +56,12 @@ export function useElements() {
     await Promise.all(ids.map(removeElement))
   }, [])
 
+  /** Direct replace — used by undo/redo to restore a previous elements snapshot */
+  const replaceElements = useCallback(async (newElements: Element[]) => {
+    setElements(newElements)
+    await saveElements(newElements)
+  }, [])
+
   const bringToFront = useCallback(async (id: string) => {
     setElements((prev) => {
       const idx = prev.findIndex((e) => e.id === id)
@@ -116,5 +122,6 @@ export function useElements() {
     bringForward,
     sendBackward,
     setElements,
+    replaceElements,
   }
 }

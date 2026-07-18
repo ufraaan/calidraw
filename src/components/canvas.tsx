@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useSelector } from '@tanstack/react-store'
-import { canvasStore, setSelectedIds } from '../stores/canvas-store'
+import { canvasStore, setSelectedIds, triggerSaveStatus } from '../stores/canvas-store'
 import { useElements } from '../hooks/use-elements'
 import {
   useKeyboard,
@@ -13,6 +13,7 @@ import { Toolbar } from './toolbar'
 import { ZoomControl } from './zoom-control'
 import { ContextMenu, MenuItem, MenuSeparator } from './context-menu'
 import { ExportModal } from './export-modal'
+import { TextEditor } from './text-editor'
 import { copyToClipboardAsPNG } from '../lib/renderer'
 import { generateId, getNormalizedBounds } from '../lib/geometry'
 import { IconDownload } from '@tabler/icons-react'
@@ -31,10 +32,47 @@ export function CanvasView(): ReactNode {
     sendToBack,
     bringForward,
     sendBackward,
+    replaceElements,
   } = useElements()
 
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
   useKeyboard()
+
+  // ── Undo / Redo ─────────────────────────────────────────────
+  const [undoStack, setUndoStack] = useState<Element[][]>([])
+  const [redoStack, setRedoStack] = useState<Element[][]>([])
+  const elementsRef = useRef(elements)
+  elementsRef.current = elements
+
+  const pushUndo = useCallback(() => {
+    setUndoStack((prev) => {
+      const maxLen = 50
+      const next = [...prev, elementsRef.current]
+      return next.length > maxLen ? next.slice(next.length - maxLen) : next
+    })
+    setRedoStack([])
+  }, [])
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return
+    const prev = undoStack[undoStack.length - 1]
+    setRedoStack((r) => [...r, elementsRef.current])
+    setUndoStack((u) => u.slice(0, -1))
+    replaceElements(prev)
+    // Re-select whatever was selected
+    const newIds = prev.filter((e) => selectedIds.includes(e.id)).map((e) => e.id)
+    setSelectedIds(newIds)
+  }, [undoStack, replaceElements, selectedIds])
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return
+    const next = redoStack[redoStack.length - 1]
+    setUndoStack((u) => [...u, elementsRef.current])
+    setRedoStack((r) => r.slice(0, -1))
+    replaceElements(next)
+    const newIds = next.filter((e) => selectedIds.includes(e.id)).map((e) => e.id)
+    setSelectedIds(newIds)
+  }, [redoStack, replaceElements, selectedIds])
 
   // ── Context menu state ────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{
@@ -45,22 +83,74 @@ export function CanvasView(): ReactNode {
   // ── Export modal state ─────────────────────────────────────
   const [showExport, setShowExport] = useState(false)
 
+  // ── Text editing state ─────────────────────────────────────
+  const [editingTextId, setEditingTextId] = useState<string | null>(null)
+  const editingTextEl = editingTextId ? elements.find((e) => e.id === editingTextId) ?? null : null
+
+  const handleTextSave = useCallback(
+    (id: string, text: string) => {
+      const el = elements.find((e) => e.id === id)
+      if (el) {
+        pushUndo()
+        upsertElement({ ...el, text })
+      }
+      setEditingTextId(null)
+    },
+    [elements, upsertElement, pushUndo],
+  )
+
+  const handleTextCancel = useCallback(() => {
+    setEditingTextId(null)
+  }, [])
+
   const closeCtxMenu = useCallback(() => setCtxMenu(null), [])
 
   // ── Canvas handlers ───────────────────────────────────────
   const { canvasRef, handlePointerDown, handlePointerMove, handlePointerUp } =
     useCanvas({
       elements,
-      onElementCreate: upsertElement,
-      onElementsUpdate: upsertElements,
+      onElementCreate: (el) => {
+        pushUndo()
+        upsertElement(el)
+      },
+      onElementsUpdate: (els) => {
+        pushUndo()
+        upsertElements(els)
+      },
     })
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       closeCtxMenu()
+      // Click outside text editor — commit
+      if (editingTextId) {
+        setEditingTextId(null)
+      }
       handlePointerDown(e)
     },
-    [handlePointerDown, closeCtxMenu],
+    [handlePointerDown, closeCtxMenu, editingTextId],
+  )
+
+  // ── Double-click → text editing ────────────────────────────
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const s = canvasStore.state
+      const cx = (e.clientX - s.offsetX) / s.zoom
+      const cy = (e.clientY - s.offsetY) / s.zoom
+
+      // Find a text element under the cursor
+      const hit = [...elements].reverse().find((el) => {
+        if (el.type !== 'text') return false
+        const b = getNormalizedBounds(el)
+        return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h
+      })
+
+      if (hit) {
+        setEditingTextId(hit.id)
+        setSelectedIds([hit.id])
+      }
+    },
+    [elements],
   )
 
   // ── Right-click → context menu ────────────────────────────
@@ -103,10 +193,11 @@ export function CanvasView(): ReactNode {
     if (selectedIds.length === 0) return
     const sel = elements.filter((e) => selectedIds.includes(e.id))
     copyToInternalClipboard(sel)
+    pushUndo()
     deleteElements(selectedIds)
     setSelectedIds([])
     closeCtxMenu()
-  }, [elements, selectedIds, deleteElements, closeCtxMenu])
+  }, [elements, selectedIds, deleteElements, closeCtxMenu, pushUndo])
 
   const handlePaste = useCallback(() => {
     if (clipboardElements.length === 0) return
@@ -120,23 +211,26 @@ export function CanvasView(): ReactNode {
       x: el.x + cx - 50 + i * 20,
       y: el.y + cy - 50 + i * 20,
     }))
+    pushUndo()
     upsertElements(pasted)
     setSelectedIds(pasted.map((e) => e.id))
     closeCtxMenu()
-  }, [closeCtxMenu, upsertElements])
+  }, [closeCtxMenu, upsertElements, pushUndo])
 
   const handleDelete = useCallback(() => {
     if (selectedIds.length === 0) return
+    pushUndo()
     deleteElements(selectedIds)
     setSelectedIds([])
     closeCtxMenu()
-  }, [selectedIds, deleteElements, closeCtxMenu])
+  }, [selectedIds, deleteElements, closeCtxMenu, pushUndo])
 
   const handleDeleteSelected = useCallback(() => {
     if (selectedIds.length === 0) return
+    pushUndo()
     deleteElements(selectedIds)
     setSelectedIds([])
-  }, [selectedIds, deleteElements])
+  }, [selectedIds, deleteElements, pushUndo])
 
   const handleCopyPNG = useCallback(async () => {
     if (selectedIds.length === 0) return
@@ -154,6 +248,7 @@ export function CanvasView(): ReactNode {
 
   const handleDuplicate = useCallback(() => {
     if (selectedIds.length === 0) return
+    pushUndo()
     const dups = elements
       .filter((e) => selectedIds.includes(e.id))
       .map((e) => ({
@@ -164,17 +259,18 @@ export function CanvasView(): ReactNode {
       }))
     upsertElements(dups)
     setSelectedIds(dups.map((e) => e.id))
-  }, [elements, selectedIds, upsertElements])
+  }, [elements, selectedIds, upsertElements, pushUndo])
 
   const handleNudge = useCallback(
     (dx: number, dy: number) => {
       if (selectedIds.length === 0) return
+      pushUndo()
       const nudged = elements
         .filter((e) => selectedIds.includes(e.id))
         .map((e) => ({ ...e, x: e.x + dx, y: e.y + dy }))
       upsertElements(nudged)
     },
-    [elements, selectedIds, upsertElements],
+    [elements, selectedIds, upsertElements, pushUndo],
   )
 
   useEffect(() => {
@@ -186,6 +282,8 @@ export function CanvasView(): ReactNode {
       selectAll: handleSelectAll,
       duplicate: handleDuplicate,
       nudge: handleNudge,
+      undo: handleUndo,
+      redo: handleRedo,
     })
   }, [
     handleCopy,
@@ -195,6 +293,8 @@ export function CanvasView(): ReactNode {
     handleSelectAll,
     handleDuplicate,
     handleNudge,
+    handleUndo,
+    handleRedo,
   ])
 
   // ── Clipboard paste (images from system) ──────────────────
@@ -241,6 +341,7 @@ export function CanvasView(): ReactNode {
                 opacity: 100,
                 imageData: dataUrl,
               }
+              pushUndo()
               upsertElement(el)
               setSelectedIds([el.id])
             }
@@ -253,7 +354,12 @@ export function CanvasView(): ReactNode {
 
     canvas.addEventListener('paste', onPaste)
     return () => canvas.removeEventListener('paste', onPaste)
-  }, [canvasRef, upsertElement])
+  }, [canvasRef, upsertElement, pushUndo])
+
+  // ── Save status tracking ──────────────────────────────────
+  useEffect(() => {
+    if (elements.length > 0) triggerSaveStatus()
+  }, [elements])
 
   // ── Context menu actions ──────────────────────────────────
   const selectedElement =
@@ -261,8 +367,14 @@ export function CanvasView(): ReactNode {
       ? elements.find((e) => e.id === selectedIds[0]) ?? null
       : null
 
+  const multiSelectedElements =
+    selectedIds.length > 1
+      ? elements.filter((e) => selectedIds.includes(e.id))
+      : null
+
   const flipHorizontal = useCallback(() => {
     if (!selectedElement) return
+    pushUndo()
     const el = selectedElement
     const cx = el.x + el.width / 2
     const newEl: Element = {
@@ -278,10 +390,11 @@ export function CanvasView(): ReactNode {
     }
     upsertElement(newEl)
     closeCtxMenu()
-  }, [selectedElement, upsertElement, closeCtxMenu])
+  }, [selectedElement, upsertElement, closeCtxMenu, pushUndo])
 
   const flipVertical = useCallback(() => {
     if (!selectedElement) return
+    pushUndo()
     const el = selectedElement
     const cy = el.y + el.height / 2
     const newEl: Element = {
@@ -297,9 +410,11 @@ export function CanvasView(): ReactNode {
     }
     upsertElement(newEl)
     closeCtxMenu()
-  }, [selectedElement, upsertElement, closeCtxMenu])
+  }, [selectedElement, upsertElement, closeCtxMenu, pushUndo])
 
   const hasSelection = selectedIds.length > 0
+  const hasMultiSel = selectedIds.length > 1
+  const hasThreePlus = selectedIds.length > 2
 
   // ── Copy / Paste Style ───────────────────────────────────
   const handleCopyStyle = useCallback(() => {
@@ -317,12 +432,153 @@ export function CanvasView(): ReactNode {
 
   const handlePasteStyle = useCallback(() => {
     if (!copiedStyle || !hasSelection) return
+    pushUndo()
     const updated = elements
       .filter((e) => selectedIds.includes(e.id))
       .map((e) => ({ ...e, ...copiedStyle }))
     upsertElements(updated)
     closeCtxMenu()
-  }, [copiedStyle, hasSelection, elements, selectedIds, upsertElements, closeCtxMenu])
+  }, [copiedStyle, hasSelection, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+
+  // ── Alignment handlers ─────────────────────────────────────
+  const alignLeft = useCallback(() => {
+    if (!multiSelectedElements) return
+    pushUndo()
+    const minX = Math.min(...multiSelectedElements.map((e) => getNormalizedBounds(e).x))
+    const updated = elements.map((e) =>
+      selectedIds.includes(e.id) ? { ...e, x: minX } : e,
+    )
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+
+  const alignRight = useCallback(() => {
+    if (!multiSelectedElements) return
+    pushUndo()
+    const maxRight = Math.max(...multiSelectedElements.map((e) => {
+      const b = getNormalizedBounds(e)
+      return b.x + b.w
+    }))
+    const updated = elements.map((e) =>
+      selectedIds.includes(e.id)
+        ? { ...e, x: maxRight - Math.abs(e.width) }
+        : e,
+    )
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+
+  const alignCenterX = useCallback(() => {
+    if (!multiSelectedElements) return
+    pushUndo()
+    const centers = multiSelectedElements.map((e) => {
+      const b = getNormalizedBounds(e)
+      return b.x + b.w / 2
+    })
+    const avgCenter = centers.reduce((a, b) => a + b, 0) / centers.length
+    const updated = elements.map((e) =>
+      selectedIds.includes(e.id)
+        ? { ...e, x: avgCenter - Math.abs(e.width) / 2 }
+        : e,
+    )
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+
+  const alignTop = useCallback(() => {
+    if (!multiSelectedElements) return
+    pushUndo()
+    const minY = Math.min(...multiSelectedElements.map((e) => getNormalizedBounds(e).y))
+    const updated = elements.map((e) =>
+      selectedIds.includes(e.id) ? { ...e, y: minY } : e,
+    )
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+
+  const alignBottom = useCallback(() => {
+    if (!multiSelectedElements) return
+    pushUndo()
+    const maxBottom = Math.max(...multiSelectedElements.map((e) => {
+      const b = getNormalizedBounds(e)
+      return b.y + b.h
+    }))
+    const updated = elements.map((e) =>
+      selectedIds.includes(e.id)
+        ? { ...e, y: maxBottom - Math.abs(e.height) }
+        : e,
+    )
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+
+  const alignCenterY = useCallback(() => {
+    if (!multiSelectedElements) return
+    pushUndo()
+    const centers = multiSelectedElements.map((e) => {
+      const b = getNormalizedBounds(e)
+      return b.y + b.h / 2
+    })
+    const avgCenter = centers.reduce((a, b) => a + b, 0) / centers.length
+    const updated = elements.map((e) =>
+      selectedIds.includes(e.id)
+        ? { ...e, y: avgCenter - Math.abs(e.height) / 2 }
+        : e,
+    )
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+
+  // ── Distribute handlers ────────────────────────────────────
+  const distributeHorizontally = useCallback(() => {
+    if (!multiSelectedElements || selectedIds.length < 3) return
+    pushUndo()
+    const sel = multiSelectedElements.sort((a, b) => {
+      const ba = getNormalizedBounds(a)
+      const bb = getNormalizedBounds(b)
+      return ba.x + ba.w / 2 - (bb.x + bb.w / 2)
+    })
+    const first = getNormalizedBounds(sel[0])
+    const last = getNormalizedBounds(sel[sel.length - 1])
+    const start = first.x + first.w / 2
+    const end = last.x + last.w / 2
+    const totalWidth = end - start
+    const gap = totalWidth / (sel.length - 1)
+
+    const updated = elements.map((e) => {
+      const idx = sel.findIndex((s) => s.id === e.id)
+      if (idx === -1) return e
+      const targetCenter = start + gap * idx
+      return { ...e, x: targetCenter - Math.abs(e.width) / 2 }
+    })
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, selectedIds, elements, upsertElements, closeCtxMenu, pushUndo])
+
+  const distributeVertically = useCallback(() => {
+    if (!multiSelectedElements || selectedIds.length < 3) return
+    pushUndo()
+    const sel = multiSelectedElements.sort((a, b) => {
+      const ba = getNormalizedBounds(a)
+      const bb = getNormalizedBounds(b)
+      return ba.y + ba.h / 2 - (bb.y + bb.h / 2)
+    })
+    const first = getNormalizedBounds(sel[0])
+    const last = getNormalizedBounds(sel[sel.length - 1])
+    const start = first.y + first.h / 2
+    const end = last.y + last.h / 2
+    const totalHeight = end - start
+    const gap = totalHeight / (sel.length - 1)
+
+    const updated = elements.map((e) => {
+      const idx = sel.findIndex((s) => s.id === e.id)
+      if (idx === -1) return e
+      const targetCenter = start + gap * idx
+      return { ...e, y: targetCenter - Math.abs(e.height) / 2 }
+    })
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [multiSelectedElements, selectedIds, elements, upsertElements, closeCtxMenu, pushUndo])
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
@@ -334,8 +590,18 @@ export function CanvasView(): ReactNode {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
       />
+
+      {/* Text editing overlay */}
+      {editingTextEl && (
+        <TextEditor
+          element={editingTextEl}
+          onSave={handleTextSave}
+          onCancel={handleTextCancel}
+        />
+      )}
 
       {/* Export button — top left */}
       <div className="pointer-events-auto absolute left-4 top-4">
@@ -375,6 +641,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
+                pushUndo()
                 bringToFront(selectedElement.id)
                 closeCtxMenu()
               }
@@ -386,6 +653,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
+                pushUndo()
                 bringForward(selectedElement.id)
                 closeCtxMenu()
               }
@@ -397,6 +665,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
+                pushUndo()
                 sendBackward(selectedElement.id)
                 closeCtxMenu()
               }
@@ -408,6 +677,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
+                pushUndo()
                 sendToBack(selectedElement.id)
                 closeCtxMenu()
               }
@@ -415,6 +685,36 @@ export function CanvasView(): ReactNode {
             disabled={!selectedElement}
           >
             <SendBackIcon /> Send to Back
+          </MenuItem>
+          <MenuSeparator />
+
+          {/* Alignment */}
+          <MenuItem onClick={alignLeft} disabled={!hasMultiSel}>
+            <AlignLeftIcon /> Align Left
+          </MenuItem>
+          <MenuItem onClick={alignCenterX} disabled={!hasMultiSel}>
+            <AlignCenterXIcon /> Align Center
+          </MenuItem>
+          <MenuItem onClick={alignRight} disabled={!hasMultiSel}>
+            <AlignRightIcon /> Align Right
+          </MenuItem>
+          <MenuItem onClick={alignTop} disabled={!hasMultiSel}>
+            <AlignTopIcon /> Align Top
+          </MenuItem>
+          <MenuItem onClick={alignCenterY} disabled={!hasMultiSel}>
+            <AlignCenterYIcon /> Align Middle
+          </MenuItem>
+          <MenuItem onClick={alignBottom} disabled={!hasMultiSel}>
+            <AlignBottomIcon /> Align Bottom
+          </MenuItem>
+          <MenuSeparator />
+
+          {/* Distribute */}
+          <MenuItem onClick={distributeHorizontally} disabled={!hasThreePlus}>
+            <DistributeHIcon /> Distribute Horizontally
+          </MenuItem>
+          <MenuItem onClick={distributeVertically} disabled={!hasThreePlus}>
+            <DistributeVIcon /> Distribute Vertically
           </MenuItem>
           <MenuSeparator />
 
@@ -445,7 +745,6 @@ export function CanvasView(): ReactNode {
           </MenuItem>
         </ContextMenu>
       )}
-
     </div>
   )
 }
@@ -539,6 +838,66 @@ function PasteStyleIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3h4a2 2 0 012 2v2" /><path d="M16 17h4a2 2 0 002-2V7l-4-4h-4" /><rect x="2" y="11" width="10" height="10" rx="1" />
+    </svg>
+  )
+}
+
+// ── Alignment icons ────────────────────────────────────────
+function AlignLeftIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="17" y1="10" x2="3" y2="10" /><line x1="21" y1="6" x2="3" y2="6" /><line x1="17" y1="14" x2="3" y2="14" /><line x1="21" y1="18" x2="3" y2="18" />
+    </svg>
+  )
+}
+function AlignCenterXIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="10" x2="6" y2="10" /><line x1="21" y1="6" x2="3" y2="6" /><line x1="18" y1="14" x2="6" y2="14" /><line x1="21" y1="18" x2="3" y2="18" />
+    </svg>
+  )
+}
+function AlignRightIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="21" y1="10" x2="7" y2="10" /><line x1="21" y1="6" x2="3" y2="6" /><line x1="21" y1="14" x2="7" y2="14" /><line x1="21" y1="18" x2="3" y2="18" />
+    </svg>
+  )
+}
+function AlignTopIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="14" y1="7" x2="14" y2="21" /><line x1="10" y1="3" x2="10" y2="21" /><line x1="6" y1="7" x2="6" y2="21" /><line x1="18" y1="3" x2="18" y2="21" />
+    </svg>
+  )
+}
+function AlignCenterYIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="14" y1="18" x2="14" y2="6" /><line x1="10" y1="21" x2="10" y2="3" /><line x1="6" y1="18" x2="6" y2="6" /><line x1="18" y1="21" x2="18" y2="3" />
+    </svg>
+  )
+}
+function AlignBottomIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="14" y1="17" x2="14" y2="3" /><line x1="10" y1="21" x2="10" y2="3" /><line x1="6" y1="17" x2="6" y2="3" /><line x1="18" y1="21" x2="18" y2="3" />
+    </svg>
+  )
+}
+function DistributeHIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+      <circle cx="7" cy="6" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="17" cy="18" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+function DistributeVIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" y1="3" x2="6" y2="21" /><line x1="12" y1="3" x2="12" y2="21" /><line x1="18" y1="3" x2="18" y2="21" />
+      <circle cx="6" cy="7" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="18" cy="17" r="1" fill="currentColor" />
     </svg>
   )
 }

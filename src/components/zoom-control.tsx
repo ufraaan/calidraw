@@ -1,10 +1,11 @@
 import { useSelector } from '@tanstack/react-store'
-import { canvasStore, zoomAtPoint } from '../stores/canvas-store'
+import { canvasStore, animateZoom } from '../stores/canvas-store'
 import type { ReactNode } from 'react'
 
 export function ZoomControl(): ReactNode {
   const zoom = useSelector(canvasStore, (s) => s.zoom)
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
+  const saveStatus = useSelector(canvasStore, (s) => s.saveStatus)
   const hasSelection = selectedIds.length > 0
 
   const glass =
@@ -12,6 +13,27 @@ export function ZoomControl(): ReactNode {
 
   return (
     <div className={`pointer-events-auto absolute bottom-6 right-6 flex items-center rounded-lg ${glass} px-3 py-1.5 gap-2`}>
+      {/* Auto-save indicator */}
+      <div className="flex items-center gap-1.5">
+        <div
+          className={`size-1.5 rounded-full transition-colors duration-300 ${
+            saveStatus === 'saving'
+              ? 'bg-amber-400'
+              : saveStatus === 'saved'
+                ? 'bg-emerald-400'
+                : 'bg-zinc-300 dark:bg-zinc-600'
+          }`}
+        />
+        <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
+        </span>
+      </div>
+
+      {/* Divider */}
+      {saveStatus !== 'idle' && hasSelection && (
+        <div className="h-4 w-px bg-black/[0.06] dark:bg-white/[0.06]" />
+      )}
+
       {/* Element count */}
       {hasSelection && (
         <>
@@ -26,7 +48,7 @@ export function ZoomControl(): ReactNode {
       <button
         type="button"
         aria-label="Zoom out"
-        onClick={() => zoomAtPoint(Math.max(0.1, zoom - 0.1))}
+        onClick={() => animateZoom(zoom - 0.1)}
         className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -45,7 +67,7 @@ export function ZoomControl(): ReactNode {
       <button
         type="button"
         aria-label="Zoom in"
-        onClick={() => zoomAtPoint(Math.min(5, zoom + 0.1))}
+        onClick={() => animateZoom(zoom + 0.1)}
         className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -62,7 +84,7 @@ export function ZoomControl(): ReactNode {
       {/* Reset */}
       <button
         type="button"
-        onClick={() => zoomAtPoint(1)}
+        onClick={() => animateZoom(1)}
         className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
       >
         Reset

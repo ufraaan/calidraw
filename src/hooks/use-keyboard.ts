@@ -22,6 +22,8 @@ export interface ClipboardActions {
   selectAll: () => void
   duplicate: () => void
   nudge: (dx: number, dy: number) => void
+  undo: () => void
+  redo: () => void
 }
 
 let clipboardActions: ClipboardActions = {
@@ -32,6 +34,8 @@ let clipboardActions: ClipboardActions = {
   selectAll: () => {},
   duplicate: () => {},
   nudge: () => {},
+  undo: () => {},
+  redo: () => {},
 }
 
 export function setClipboardActions(actions: Partial<ClipboardActions>) {
@@ -74,6 +78,14 @@ export function useKeyboard() {
       // ── Modifier-based shortcuts ──────────────────────────
       if (mod) {
         switch (key) {
+          case 'z':
+            e.preventDefault()
+            if (shift) {
+              clipboardActions.redo()
+            } else {
+              clipboardActions.undo()
+            }
+            return
           case 'a':
             e.preventDefault()
             clipboardActions.selectAll()

@@ -3,7 +3,7 @@ import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setSelectedIds, setOffset, setTool, zoomAtPoint } from '../stores/canvas-store'
 import { renderScene } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
-import { hitTest, hitTestResizeHandle, getResizedElement, generateId } from '../lib/geometry'
+import { hitTest, hitTestResizeHandle, getResizedElement, hitTestRotationHandle, getRotationAngle, generateId } from '../lib/geometry'
 import type { Element, Point, Tool } from '../types'
 import type { ResizeHandle } from '../lib/geometry'
 
@@ -50,6 +50,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   const panStartRef = useRef<Point | null>(null)
   const dragOriginRef = useRef<{ point: Point; elements: Element[] } | null>(null)
   const resizeHandleRef = useRef<ResizeHandle | null>(null)
+  const rotatingRef = useRef<string | null>(null)
   const marqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const hoveredElRef = useRef<string | null>(null)
   const cursorPosRef = useRef<Point | null>(null)
@@ -194,6 +195,62 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [scheduleDraw])
 
+  // ── Touch pinch zoom ──────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    let lastDist = 0
+    let lastCenter: { x: number; y: number } | null = null
+
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length === 2) {
+        const t1 = e.touches[0]
+        const t2 = e.touches[1]
+        lastDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+        lastCenter = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        }
+      }
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      if (e.touches.length === 2) {
+        e.preventDefault()
+        const t1 = e.touches[0]
+        const t2 = e.touches[1]
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+        if (lastDist > 0 && lastCenter) {
+          const scale = dist / lastDist
+          const cur = canvasStore.state.zoom
+          const newZoom = Math.max(0.1, Math.min(5, cur * scale))
+          zoomAtPoint(newZoom, lastCenter.x, lastCenter.y)
+        }
+        lastDist = dist
+        lastCenter = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        }
+        scheduleDraw()
+      }
+    }
+
+    function onTouchEnd() {
+      lastDist = 0
+      lastCenter = null
+    }
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true })
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false })
+    canvas.addEventListener('touchend', onTouchEnd)
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart)
+      canvas.removeEventListener('touchmove', onTouchMove)
+      canvas.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [scheduleDraw])
+
   // ── Cursor ─────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
@@ -247,7 +304,16 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
             ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
             : undefined
 
-        // 1) Resize handles on first selected element
+        // 1) Rotation handle on first selected element
+        if (firstSelected) {
+          if (hitTestRotationHandle(point, firstSelected)) {
+            rotatingRef.current = firstSelected.id
+            dragOriginRef.current = { point, elements: [{ ...firstSelected }] }
+            return
+          }
+        }
+
+        // 2) Resize handles on first selected element
         if (firstSelected) {
           const handle = hitTestResizeHandle(point, firstSelected)
           if (handle) {
@@ -329,6 +395,16 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
+      // Rotation
+      if (rotatingRef.current && dragOriginRef.current) {
+        const { elements: els } = dragOriginRef.current
+        const angle = getRotationAngle(els[0], point)
+        dragIdsRef.current = new Set([els[0].id])
+        transientRef.current = [{ ...els[0], angle }]
+        scheduleDraw()
+        return
+      }
+
       // Resize
       if (resizeHandleRef.current && dragOriginRef.current) {
         const { elements: els } = dragOriginRef.current
@@ -358,13 +434,21 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
 
       // Hover detection + cursor (select tool only)
       if (tool === 'select') {
-        // Resize cursor on handles/edges of selected element
         const firstSelected =
           selectedRef.current.length > 0
             ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
             : undefined
         let cursorSet = false
+
         if (firstSelected && selectedRef.current.length === 1) {
+          // Rotation handle cursor (takes priority)
+          if (hitTestRotationHandle(point, firstSelected)) {
+            if (canvasRef.current) canvasRef.current.style.cursor = 'grab'
+            cursorSet = true
+          }
+        }
+
+        if (!cursorSet && firstSelected && selectedRef.current.length === 1) {
           const handle = hitTestResizeHandle(point, firstSelected)
           if (handle) {
             if (canvasRef.current) canvasRef.current.style.cursor = RESIZE_CURSOR[handle]
@@ -433,6 +517,17 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
           setSelectedIds(inside.map((e) => e.id))
         }
         scheduleDraw()
+        return
+      }
+
+      // Rotation
+      if (rotatingRef.current) {
+        const moved = transientRef.current
+        rotatingRef.current = null
+        dragOriginRef.current = null
+        dragIdsRef.current = new Set()
+        transientRef.current = []
+        if (moved.length > 0) onElementsUpdate(moved)
         return
       }
 

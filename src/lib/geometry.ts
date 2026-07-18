@@ -52,6 +52,26 @@ export function hitTest(point: Point, element: Element): boolean {
   return pointInBounds(point, bounds)
 }
 
+// ── Rotation ─────────────────────────────────────────────────
+export function getRotationHandlePosition(element: Element): Point {
+  const b = getNormalizedBounds(element)
+  return { x: b.x + b.w / 2, y: b.y - 28 }
+}
+
+export function hitTestRotationHandle(point: Point, element: Element): boolean {
+  const handle = getRotationHandlePosition(element)
+  const threshold = 14
+  return Math.abs(point.x - handle.x) <= threshold && Math.abs(point.y - handle.y) <= threshold
+}
+
+/** Compute angle from element center to mouse point */
+export function getRotationAngle(element: Element, mouse: Point): number {
+  const b = getNormalizedBounds(element)
+  const cx = b.x + b.w / 2
+  const cy = b.y + b.h / 2
+  return Math.atan2(mouse.y - cy, mouse.x - cx)
+}
+
 export function generateId(): string {
   return crypto.randomUUID()
 }

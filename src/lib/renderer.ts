@@ -156,6 +156,14 @@ export function renderScene(
     ctx.save()
     ctx.globalAlpha = el.opacity / 100
 
+    // Rotation
+    if (el.angle !== 0) {
+      const b = getCenter(el)
+      ctx.translate(b.cx, b.cy)
+      ctx.rotate(el.angle)
+      ctx.translate(-b.cx, -b.cy)
+    }
+
     switch (el.type) {
       case 'rectangle':
         renderRectangle(rc, el)
@@ -184,9 +192,14 @@ export function renderScene(
     }
 
     ctx.restore()
+  }
 
-    if (showSelection && selectedIds.has(el.id)) {
-      renderSelectionIndicator(ctx, el)
+  // Selection indicators (draw on top, after all elements)
+  if (showSelection) {
+    for (const el of elements) {
+      if (selectedIds.has(el.id)) {
+        renderSelectionIndicator(ctx, el)
+      }
     }
   }
 }
@@ -196,18 +209,25 @@ function renderSelectionIndicator(
   ctx: CanvasRenderingContext2D,
   el: Element,
 ) {
+  const b = getCenter(el)
   const x = el.width >= 0 ? el.x : el.x + el.width
   const y = el.height >= 0 ? el.y : el.y + el.height
   const w = Math.abs(el.width)
   const h = Math.abs(el.height)
 
+  // Apply rotation to selection indicator too
   ctx.save()
+  if (el.angle !== 0) {
+    ctx.translate(b.cx, b.cy)
+    ctx.rotate(el.angle)
+    ctx.translate(-b.cx, -b.cy)
+  }
+
   ctx.strokeStyle = '#3b82f6'
   ctx.lineWidth = 1
   ctx.setLineDash([3, 4])
   ctx.strokeRect(x - 2, y - 2, w + 4, h + 4)
   ctx.setLineDash([])
-  ctx.restore()
 
   const r = 3
   const pts: Point[] = [
@@ -221,7 +241,6 @@ function renderSelectionIndicator(
     { x, y: y + h / 2 },
   ]
 
-  ctx.save()
   ctx.fillStyle = '#ffffff'
   ctx.strokeStyle = '#3b82f6'
   ctx.lineWidth = 1.5
@@ -231,6 +250,26 @@ function renderSelectionIndicator(
     ctx.fill()
     ctx.stroke()
   }
+
+  // ── Rotation handle ───────────────────────────────────────
+  const rotX = x + w / 2
+  const rotY = y - 24
+  ctx.strokeStyle = '#3b82f6'
+  ctx.lineWidth = 1
+  ctx.setLineDash([])
+  ctx.beginPath()
+  ctx.moveTo(rotX, rotY + 10)
+  ctx.lineTo(rotX, y)
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.arc(rotX, rotY, 4, 0, Math.PI * 2)
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  ctx.strokeStyle = '#3b82f6'
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+
   ctx.restore()
 }
 
@@ -302,6 +341,15 @@ export function downloadAsPNG(
     a.click()
     URL.revokeObjectURL(url)
   }, 'image/png')
+}
+
+// ── Rotation center helper ──────────────────────────────────
+function getCenter(el: Element) {
+  const x = el.width >= 0 ? el.x : el.x + el.width
+  const y = el.height >= 0 ? el.y : el.y + el.height
+  const w = Math.abs(el.width)
+  const h = Math.abs(el.height)
+  return { cx: x + w / 2, cy: y + h / 2 }
 }
 
 // ── SVG export ───────────────────────────────────────────────
