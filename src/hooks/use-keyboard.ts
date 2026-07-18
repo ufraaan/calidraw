@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { setTool, setZoom } from '../stores/canvas-store'
+import { setTool, zoomAtPoint } from '../stores/canvas-store'
 import type { Tool } from '../types'
 
 const toolKeyMap: Record<string, Tool> = {
@@ -35,15 +35,15 @@ export function useKeyboard() {
           case '=':
           case '+':
             e.preventDefault()
-            setZoom(Math.min(5, currentZoom + 0.1))
+            zoomAtPoint(Math.min(5, currentZoom + 0.1))
             break
           case '-':
             e.preventDefault()
-            setZoom(Math.max(0.1, currentZoom - 0.1))
+            zoomAtPoint(Math.max(0.1, currentZoom - 0.1))
             break
           case '0':
             e.preventDefault()
-            setZoom(1)
+            zoomAtPoint(1)
             break
         }
       }

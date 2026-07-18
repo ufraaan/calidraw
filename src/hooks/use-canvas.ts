@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useSelector } from '@tanstack/react-store'
-import { canvasStore, setSelectedIds, setOffset, setZoom } from '../stores/canvas-store'
+import { canvasStore, setSelectedIds, setOffset, zoomAtPoint } from '../stores/canvas-store'
 import { renderScene } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
 import { hitTest } from '../lib/geometry'
@@ -28,9 +28,11 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tool = useSelector(canvasStore, (s) => s.tool)
   const zoom = useSelector(canvasStore, (s) => s.zoom)
-  const offsetX = useSelector(canvasStore, (s) => s.offsetX)
-  const offsetY = useSelector(canvasStore, (s) => s.offsetY)
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
+
+  // offsetX/offsetY intentionally NOT selected via useSelector —
+  // they change at high frequency during pan and would thrash React.
+  // Read them from canvasStore.state directly where needed.
 
   // ── Refs (transient render state — avoids React re-renders) ──
   const elementsRef = useRef(elements)
@@ -90,7 +92,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   // ── Re-render when committed state changes ────────────────────
   useEffect(() => {
     draw()
-  }, [draw, elements, offsetX, offsetY, selectedIds, tool])
+  }, [draw, elements, zoom, selectedIds, tool])
 
   // ── Wheel: trackpad pan / ctrl+zoom ───────────────────────────
   useEffect(() => {
@@ -103,16 +105,18 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       if (e.ctrlKey || e.metaKey) {
         const delta = -e.deltaY * 0.01
         const cur = canvasStore.state.zoom
-        setZoom(Math.max(0.1, Math.min(5, cur + delta * cur)))
+        const newZoom = Math.max(0.1, Math.min(5, cur + delta * cur))
+        zoomAtPoint(newZoom, e.clientX, e.clientY)
       } else {
         const cur = canvasStore.state
         setOffset(cur.offsetX - e.deltaX, cur.offsetY - e.deltaY)
       }
+      scheduleDraw()
     }
 
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
-  }, [])
+  }, [scheduleDraw])
 
   // ── Cursor ────────────────────────────────────────────────────
   useEffect(() => {
@@ -121,13 +125,16 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     canvas.style.cursor = panStartRef.current ? 'grabbing' : (TOOL_CURSOR[tool] ?? 'default')
   }, [tool])
 
-  // ── Coordinate mapping ────────────────────────────────────────
+  // ── Coordinate mapping (reads live store — no stale closures) ─
   const screenToCanvas = useCallback(
-    (sx: number, sy: number): Point => ({
-      x: (sx - offsetX) / zoom,
-      y: (sy - offsetY) / zoom,
-    }),
-    [zoom, offsetX, offsetY],
+    (sx: number, sy: number): Point => {
+      const s = canvasStore.state
+      return {
+        x: (sx - s.offsetX) / s.zoom,
+        y: (sy - s.offsetY) / s.zoom,
+      }
+    },
+    [],
   )
 
   // ── Pointer down ──────────────────────────────────────────────
@@ -149,6 +156,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         } else {
           setSelectedIds([])
         }
+        scheduleDraw()
         return
       }
 
@@ -156,7 +164,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         startDrawing(point)
       }
     },
-    [tool, screenToCanvas],
+    [tool, screenToCanvas, scheduleDraw],
   )
 
   // ── Pointer move ──────────────────────────────────────────────
@@ -171,6 +179,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         const cur = canvasStore.state
         setOffset(cur.offsetX + dx, cur.offsetY + dy)
         panStartRef.current = { x: e.clientX, y: e.clientY }
+        scheduleDraw()
         return
       }
 

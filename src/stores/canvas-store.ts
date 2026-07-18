@@ -35,8 +35,18 @@ export function setTool(tool: Tool) {
   canvasStore.setState((s) => ({ ...s, tool }))
 }
 
-export function setZoom(zoom: number) {
-  canvasStore.setState((s) => ({ ...s, zoom }))
+export function zoomAtPoint(newZoom: number, cx?: number, cy?: number) {
+  const s = canvasStore.state
+  const px = cx ?? window.innerWidth / 2
+  const py = cy ?? window.innerHeight / 2
+  const canvasX = (px - s.offsetX) / s.zoom
+  const canvasY = (py - s.offsetY) / s.zoom
+  canvasStore.setState((prev) => ({
+    ...prev,
+    zoom: newZoom,
+    offsetX: px - canvasX * newZoom,
+    offsetY: py - canvasY * newZoom,
+  }))
 }
 
 export function setOffset(offsetX: number, offsetY: number) {
