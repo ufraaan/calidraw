@@ -44,18 +44,6 @@ export function updateDrawing(point: Point): Partial<Element> | null {
     }
   }
 
-  if (state.tool === 'line') {
-    drawState.points.push(point)
-    return {
-      type: 'line',
-      x: startPoint.x,
-      y: startPoint.y,
-      width: currentPoint.x - startPoint.x,
-      height: currentPoint.y - startPoint.y,
-      points: [...drawState.points],
-    }
-  }
-
   const base: Partial<Element> = {
     strokeColor: state.strokeColor,
     backgroundColor: state.backgroundColor,
@@ -78,13 +66,15 @@ export function updateDrawing(point: Point): Partial<Element> | null {
         height: currentPoint.y - startPoint.y,
       }
     case 'arrow':
+    case 'line':
       return {
         ...base,
-        type: 'arrow',
+        type: state.tool,
         x: startPoint.x,
         y: startPoint.y,
         width: currentPoint.x - startPoint.x,
         height: currentPoint.y - startPoint.y,
+        points: [{ ...startPoint }, { ...currentPoint }],
       }
     default:
       return null
@@ -124,26 +114,18 @@ export function endDrawing(): Element | null {
       }
       break
     }
-    case 'arrow': {
-      element = {
-        ...base,
-        type: 'arrow',
-        x: startPoint.x,
-        y: startPoint.y,
-        width: currentPoint ? currentPoint.x - startPoint.x : 0,
-        height: currentPoint ? currentPoint.y - startPoint.y : 0,
-      }
-      break
-    }
+    case 'arrow':
     case 'line': {
       element = {
         ...base,
-        type: 'line',
+        type: state.tool,
         x: startPoint.x,
         y: startPoint.y,
         width: currentPoint ? currentPoint.x - startPoint.x : 0,
         height: currentPoint ? currentPoint.y - startPoint.y : 0,
-        points: [...drawState.points],
+        ...(state.tool === 'line' && {
+          points: [{ ...startPoint }, { ...(currentPoint ?? startPoint) }],
+        }),
       }
       break
     }
