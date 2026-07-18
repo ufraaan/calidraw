@@ -55,7 +55,7 @@ export function setStrokeWidth(width: number) {
   canvasStore.setState((s) => ({ ...s, strokeWidth: width }))
 }
 
-export function setStrokeStyle(style: 'solid' | 'dashed' | 'dotted') {
+function setStrokeStyle(style: 'solid' | 'dashed' | 'dotted') {
   canvasStore.setState((s) => ({ ...s, strokeStyle: style }))
 }
 
@@ -63,7 +63,7 @@ export function setOpacity(opacity: number) {
   canvasStore.setState((s) => ({ ...s, opacity }))
 }
 
-export function setRoughness(roughness: number) {
+function setRoughness(roughness: number) {
   canvasStore.setState((s) => ({ ...s, roughness }))
 }
 
@@ -71,6 +71,6 @@ export function setSelectedIds(ids: string[]) {
   canvasStore.setState((s) => ({ ...s, selectedIds: ids }))
 }
 
-export function resetCanvasState() {
+function resetCanvasState() {
   canvasStore.setState(() => initialState)
 }

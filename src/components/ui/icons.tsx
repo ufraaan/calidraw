@@ -80,7 +80,7 @@ export function IconPan(): ReactNode {
   )
 }
 
-export function IconTrash(): ReactNode {
+function IconTrash(): ReactNode {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6" />
@@ -89,7 +89,7 @@ export function IconTrash(): ReactNode {
   )
 }
 
-export function IconUndo(): ReactNode {
+function IconUndo(): ReactNode {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="1 4 1 10 7 10" />
@@ -98,7 +98,7 @@ export function IconUndo(): ReactNode {
   )
 }
 
-export function IconRedo(): ReactNode {
+function IconRedo(): ReactNode {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="23 4 23 10 17 10" />

@@ -24,7 +24,7 @@ export function hitTest(point: Point, element: Element): boolean {
   return pointInBounds(point, bounds)
 }
 
-export function getCommonBounds(elements: Element[]): Bounds | null {
+function getCommonBounds(elements: Element[]): Bounds | null {
   if (elements.length === 0) return null
 
   let minX = Infinity
@@ -43,7 +43,7 @@ export function getCommonBounds(elements: Element[]): Bounds | null {
   return { minX, minY, maxX, maxY }
 }
 
-export function distance(a: Point, b: Point): number {
+function distance(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y)
 }
 

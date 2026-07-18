@@ -17,10 +17,10 @@ export async function removeElement(id: string): Promise<void> {
   await db.elements.delete(id)
 }
 
-export async function removeElements(ids: string[]): Promise<void> {
+async function removeElements(ids: string[]): Promise<void> {
   await db.elements.bulkDelete(ids)
 }
 
-export async function clearElements(): Promise<void> {
+async function clearElements(): Promise<void> {
   await db.elements.clear()
 }

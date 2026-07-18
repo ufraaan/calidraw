@@ -168,7 +168,7 @@ export function endDrawing(): Element | null {
   return element
 }
 
-export function getDrawState() {
+function getDrawState() {
   return drawState
 }
 

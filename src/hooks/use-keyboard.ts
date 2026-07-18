@@ -30,15 +30,16 @@ export function useKeyboard() {
       }
 
       if (e.ctrlKey || e.metaKey) {
+        const currentZoom = parseFloat(localStorage.getItem('calidraw-zoom') ?? '1')
         switch (key) {
           case '=':
           case '+':
             e.preventDefault()
-            setZoom(Math.min(5, (parseFloat(localStorage.getItem('calidraw-zoom') ?? '1')) + 0.1))
+            setZoom(Math.min(5, currentZoom + 0.1))
             break
           case '-':
             e.preventDefault()
-            setZoom(Math.max(0.1, (parseFloat(localStorage.getItem('calidraw-zoom') ?? '1')) - 0.1))
+            setZoom(Math.max(0.1, currentZoom - 0.1))
             break
           case '0':
             e.preventDefault()

@@ -41,8 +41,10 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   const dragOriginRef = useRef<{ point: Point; el: Element } | null>(null)
   const rafRef = useRef(0)
 
-  elementsRef.current = elements
-  selectedRef.current = selectedIds
+  useEffect(() => {
+    elementsRef.current = elements
+    selectedRef.current = selectedIds
+  })
 
   // ── Direct canvas render (avoids React re-render latency) ─────
   const draw = useCallback(() => {

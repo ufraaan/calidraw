@@ -7,7 +7,7 @@ const pointSchema: z.ZodType<Point> = z.object({
   y: z.number(),
 })
 
-export const elementSchema = z.object({
+const elementSchema = z.object({
   id: z.string(),
   type: z.custom<ElementType>(),
   x: z.number(),

@@ -38,6 +38,7 @@ export function ColorPicker({ label }: { label: string }): ReactNode {
             <button
               key={c}
               type="button"
+              aria-label={c}
               onClick={() => setColor(c)}
               className={`size-4 rounded-full border transition-transform hover:scale-110 ${
                 currentColor === c
@@ -50,11 +51,11 @@ export function ColorPicker({ label }: { label: string }): ReactNode {
           {label === 'fill' && (
             <button
               type="button"
+              aria-label="No fill"
               onClick={() => setBackgroundColor('transparent')}
               className={`flex size-4 items-center justify-center rounded-full border border-zinc-300 text-[9px] font-bold leading-none text-zinc-400 dark:border-zinc-600 ${
                 bgColor === 'transparent' ? 'ring-1 ring-zinc-900 dark:ring-zinc-100' : ''
               }`}
-              title="No fill"
             >
               /
             </button>
