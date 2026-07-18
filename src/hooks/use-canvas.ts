@@ -577,14 +577,14 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Drawing → select
+      // Drawing complete — stay on current tool (user chose it, they'll use it again)
       if (isShapeTool(tool as Tool)) {
         transientRef.current = []
         scheduleDraw()
         const el = endDrawing()
         if (el) {
           onElementCreate(el)
-          setTool('select')
+          // Don't switch to select — pencil/pen users want to keep drawing
         }
       }
     },
