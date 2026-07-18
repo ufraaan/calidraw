@@ -124,11 +124,40 @@ function renderPencil(rc: RoughCanvas, el: Element) {
 function renderText(ctx: CanvasRenderingContext2D, el: Element) {
   if (!el.text) return
   ctx.save()
-  ctx.font = `${el.fontSize ?? 20}px ${el.fontFamily ?? 'sans-serif'}`
+  const fontSize = el.fontSize ?? 20
+  ctx.font = `${fontSize}px ${el.fontFamily ?? 'sans-serif'}`
   ctx.fillStyle = el.strokeColor
   ctx.globalAlpha = el.opacity / 100
-  ctx.fillText(el.text, el.x, el.y)
+  ctx.textBaseline = 'top'
+
+  const lines = el.text.split('\n')
+  const lineHeight = fontSize * 1.2
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], el.x, el.y + i * lineHeight)
+  }
   ctx.restore()
+}
+
+/** Measure a block of text (multi-line) and return its pixel dimensions. */
+export function measureTextBlock(
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  lineHeight: number,
+): { width: number; height: number } {
+  const c = document.createElement('canvas')
+  const ctx = c.getContext('2d')!
+  ctx.font = `${fontSize}px ${fontFamily}`
+  const lines = text.split('\n')
+  let maxW = 0
+  for (const line of lines) {
+    const m = ctx.measureText(line)
+    if (m.width > maxW) maxW = m.width
+  }
+  return {
+    width: Math.ceil(maxW),
+    height: Math.ceil(lines.length * fontSize * lineHeight),
+  }
 }
 
 function renderImage(ctx: CanvasRenderingContext2D, el: Element) {

@@ -10,6 +10,7 @@ import type { ResizeHandle } from '../lib/geometry'
 
 interface UseCanvasOptions {
   elements: Element[]
+  editingTextId: string | null
   onElementCreate: (element: Element) => void
   onElementsUpdate: (elements: Element[]) => void
 }
@@ -40,7 +41,7 @@ const RESIZE_CURSOR: Record<ResizeHandle, string> = {
   end: 'crosshair',
 }
 
-export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCanvasOptions) {
+export function useCanvas({ elements, editingTextId, onElementCreate, onElementsUpdate }: UseCanvasOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tool = useSelector(canvasStore, (s) => s.tool)
   const zoom = useSelector(canvasStore, (s) => s.zoom)
@@ -103,7 +104,12 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     }
 
     const all = visible.concat(transientRef.current)
-    renderScene(ctx, all, sel, true, s.zoom)
+    // When editing text, don't render the element on canvas — it's
+    // overlaid by the DOM textarea and would cause visual overlap.
+    const toRender = editingTextId
+      ? all.filter((el) => el.type !== 'text' || el.id !== editingTextId)
+      : all
+    renderScene(ctx, toRender, sel, true, s.zoom)
 
     // Marquee
     const m = marqueeRef.current

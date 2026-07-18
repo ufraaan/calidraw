@@ -89,11 +89,11 @@ export function CanvasView(): ReactNode {
   const editingTextEl = editingTextId ? elements.find((e) => e.id === editingTextId) ?? null : null
 
   const handleTextSave = useCallback(
-    (id: string, text: string) => {
+    (id: string, text: string, width: number, height: number) => {
       const el = elements.find((e) => e.id === id)
       if (el) {
         pushUndo()
-        upsertElement({ ...el, text })
+        upsertElement({ ...el, text, width, height })
       }
       setEditingTextId(null)
     },
@@ -110,6 +110,7 @@ export function CanvasView(): ReactNode {
   const { canvasRef, handlePointerDown, handlePointerMove, handlePointerUp } =
     useCanvas({
       elements,
+      editingTextId,
       onElementCreate: (el) => {
         pushUndo()
         upsertElement(el)
