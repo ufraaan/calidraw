@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo } from 'react'
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setOffset } from '../stores/canvas-store'
 import { getNormalizedBounds } from '../lib/geometry'
@@ -23,6 +23,17 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
   const offsetX = useSelector(canvasStore, (s) => s.offsetX)
   const offsetY = useSelector(canvasStore, (s) => s.offsetY)
   const dragging = useRef(false)
+
+  // ── Detect dark mode ─────────────────────────────────────────
+  const [isDark, setIsDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   // ── World bounds ─────────────────────────────────────────
   const world = useMemo(() => {
@@ -63,11 +74,11 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
     // ── Panel fill (matches the glass bg so edges look seamless) ──
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = isDark ? '#18181b' : '#ffffff'
     ctx.fillRect(0, 0, W, H)
 
     // ── Preview background ──────────────────────────────────
-    ctx.fillStyle = '#f5f5f4'
+    ctx.fillStyle = isDark ? '#27272a' : '#f5f5f4'
     ctx.fillRect(0, 0, W, H)
 
     const { x: wx, y: wy, w: ww, h: wh } = world
@@ -174,9 +185,9 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
           ctx.fillRect(sx, sy, sw, sh)
           break
         case 'image':
-          ctx.fillStyle = 'rgba(0,0,0,0.04)'
+          ctx.fillStyle = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'
           ctx.fillRect(sx, sy, sw, sh)
-          ctx.strokeStyle = 'rgba(0,0,0,0.12)'
+          ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'
           ctx.lineWidth = 0.5
           ctx.strokeRect(sx, sy, sw, sh)
           break
@@ -203,7 +214,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
     ctx.lineWidth = 1
     ctx.strokeRect(rx, ry, rw, rh)
     ctx.restore()
-  }, [elements, zoom, offsetX, offsetY, world])
+  }, [elements, zoom, offsetX, offsetY, world, isDark])
 
   useEffect(() => {
     draw()

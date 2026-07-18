@@ -32,12 +32,20 @@ function loadPOV(): { zoom: number; offsetX: number; offsetY: number } | null {
 
 const saved = loadPOV()
 
+function detectDarkMode(): boolean {
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  } catch {
+    return false
+  }
+}
+
 const initialState: CanvasState = {
   tool: 'select',
   zoom: saved?.zoom ?? 1,
   offsetX: saved?.offsetX ?? 0,
   offsetY: saved?.offsetY ?? 0,
-  strokeColor: '#1e1e1e',
+  strokeColor: detectDarkMode() ? '#e4e4e7' : '#1e1e1e',
   backgroundColor: 'transparent',
   strokeWidth: 2,
   strokeStyle: 'solid',
