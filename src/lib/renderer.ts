@@ -147,6 +147,7 @@ export function renderScene(
   elements: Element[],
   selectedIds: Set<string>,
   showSelection = true,
+  zoom = 1,
 ) {
   const canvas = ctx.canvas
   ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -198,7 +199,7 @@ export function renderScene(
   if (showSelection) {
     for (const el of elements) {
       if (selectedIds.has(el.id)) {
-        renderSelectionIndicator(ctx, el)
+        renderSelectionIndicator(ctx, el, zoom)
       }
     }
   }
@@ -208,7 +209,9 @@ export function renderScene(
 function renderSelectionIndicator(
   ctx: CanvasRenderingContext2D,
   el: Element,
+  zoom = 1,
 ) {
+  const s = 1 / zoom // scale-down factor to keep screen-size constant
   const b = getCenter(el)
   const x = el.width >= 0 ? el.x : el.x + el.width
   const y = el.height >= 0 ? el.y : el.y + el.height
@@ -224,12 +227,12 @@ function renderSelectionIndicator(
   }
 
   ctx.strokeStyle = '#3b82f6'
-  ctx.lineWidth = 1
-  ctx.setLineDash([3, 4])
-  ctx.strokeRect(x - 2, y - 2, w + 4, h + 4)
+  ctx.lineWidth = 1 * s
+  ctx.setLineDash([3 * s, 4 * s])
+  ctx.strokeRect(x - 2 * s, y - 2 * s, w + 4 * s, h + 4 * s)
   ctx.setLineDash([])
 
-  const r = 3
+  const r = 3 * s
   const pts: Point[] = [
     { x, y },
     { x: x + w, y },
@@ -243,7 +246,7 @@ function renderSelectionIndicator(
 
   ctx.fillStyle = '#ffffff'
   ctx.strokeStyle = '#3b82f6'
-  ctx.lineWidth = 1.5
+  ctx.lineWidth = 1.5 * s
   for (const p of pts) {
     ctx.beginPath()
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
@@ -253,21 +256,21 @@ function renderSelectionIndicator(
 
   // ── Rotation handle ───────────────────────────────────────
   const rotX = x + w / 2
-  const rotY = y - 24
+  const rotY = y - 24 * s
   ctx.strokeStyle = '#3b82f6'
-  ctx.lineWidth = 1
+  ctx.lineWidth = 1 * s
   ctx.setLineDash([])
   ctx.beginPath()
-  ctx.moveTo(rotX, rotY + 10)
+  ctx.moveTo(rotX, rotY + 10 * s)
   ctx.lineTo(rotX, y)
   ctx.stroke()
 
   ctx.beginPath()
-  ctx.arc(rotX, rotY, 4, 0, Math.PI * 2)
+  ctx.arc(rotX, rotY, 4 * s, 0, Math.PI * 2)
   ctx.fillStyle = '#ffffff'
   ctx.fill()
   ctx.strokeStyle = '#3b82f6'
-  ctx.lineWidth = 1.5
+  ctx.lineWidth = 1.5 * s
   ctx.stroke()
 
   ctx.restore()

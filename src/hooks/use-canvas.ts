@@ -3,7 +3,7 @@ import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setSelectedIds, setOffset, setTool, zoomAtPoint } from '../stores/canvas-store'
 import { renderScene } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
-import { hitTest, hitTestResizeHandle, getResizedElement, hitTestRotationHandle, getRotationAngle, generateId } from '../lib/geometry'
+import { hitTest, hitTestResizeHandle, getResizedElement, hitTestRotationHandle, getRotationAngle, generateId, getElementBounds, pointInBounds } from '../lib/geometry'
 import type { Element, Point, Tool } from '../types'
 import type { ResizeHandle } from '../lib/geometry'
 
@@ -99,7 +99,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     }
 
     const all = visible.concat(transientRef.current)
-    renderScene(ctx, all, sel)
+    renderScene(ctx, all, sel, true, s.zoom)
 
     // Marquee
     const m = marqueeRef.current
@@ -320,6 +320,22 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
           if (handle) {
             resizeHandleRef.current = handle
             dragOriginRef.current = { point, elements: [{ ...firstSelected }] }
+            return
+          }
+        }
+
+        // 2b) If clicking inside the bounding box of an already-selected
+        //     element, drag from anywhere in the box (not just on stroke).
+        if (selectedRef.current.length > 0) {
+          const inSelBox = [...elementsRef.current]
+            .filter((el) => selectedRef.current.includes(el.id))
+            .find((el) => pointInBounds(point, getElementBounds(el)))
+          if (inSelBox) {
+            const snaps = snapshotSelection(selectedRef.current)
+            if (snaps.length > 0) {
+              dragOriginRef.current = { point, elements: snaps }
+            }
+            scheduleDraw()
             return
           }
         }
