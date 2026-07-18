@@ -25,10 +25,10 @@ export function IconButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`${s} flex items-center justify-center rounded-md text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 disabled:opacity-30 dark:text-zinc-500 dark:hover:text-zinc-200 ${
+      className={`${s} flex items-center justify-center rounded-md transition-all duration-100 active:scale-95 disabled:opacity-30 ${
         active
-          ? 'bg-black/[0.07] text-zinc-800 dark:bg-white/[0.1] dark:text-zinc-100'
-          : ''
+          ? 'bg-[#e8a07a]/15 text-[#e8a07a] dark:bg-[#e8a07a]/20 dark:text-[#e8a07a]'
+          : 'text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'
       } ${className ?? ''}`}
     >
       {children}

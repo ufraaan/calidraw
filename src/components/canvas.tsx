@@ -636,7 +636,7 @@ export function CanvasView(): ReactNode {
           type="button"
           onClick={() => setShowExport(true)}
           title="Export"
-          className="flex size-8 items-center justify-center rounded-md text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 dark:text-zinc-500 dark:hover:text-zinc-200"
+          className="flex size-8 items-center justify-center rounded-md text-zinc-400 transition-all duration-100 hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] active:scale-95 dark:text-zinc-500 dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
         >
           <IconDownload {...p} />
         </button>

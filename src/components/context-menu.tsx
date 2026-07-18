@@ -62,7 +62,7 @@ export function MenuItem({ onClick, children, disabled }: MenuItemProps) {
       className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition-colors ${
         disabled
           ? 'cursor-default text-zinc-300 dark:text-zinc-600'
-          : 'text-zinc-600 hover:bg-zinc-100 active:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+          : 'text-zinc-600 hover:bg-[#e8a07a]/10 active:bg-[#e8a07a]/15 dark:text-zinc-400 dark:hover:bg-[#e8a07a]/15'
       }`}
       onClick={onClick}
     >

@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setSelectedIds, setOffset, setTool, zoomAtPoint } from '../stores/canvas-store'
-import { renderScene } from '../lib/renderer'
+import { renderScene, BRAND } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
 import { hitTest, hitTestResizeHandle, getResizedElement, hitTestRotationHandle, getRotationAngle, generateId, getElementBounds, pointInBounds } from '../lib/geometry'
 import type { Element, Point, Tool } from '../types'
@@ -89,7 +89,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         const bw = Math.abs(hov.width)
         const bh = Math.abs(hov.height)
         ctx.save()
-        ctx.strokeStyle = 'rgba(59,130,246,0.35)'
+        ctx.strokeStyle = 'rgba(232,160,122,0.35)'
         ctx.lineWidth = 1.5 / s.zoom
         ctx.setLineDash([3 / s.zoom, 4 / s.zoom])
         ctx.strokeRect(bx - 3, by - 3, bw + 6, bh + 6)
@@ -109,8 +109,8 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       const rw = Math.abs(m.x2 - m.x1)
       const rh = Math.abs(m.y2 - m.y1)
       ctx.save()
-      ctx.fillStyle = 'rgba(59,130,246,0.08)'
-      ctx.strokeStyle = '#3b82f6'
+      ctx.fillStyle = 'rgba(232,160,122,0.10)'
+      ctx.strokeStyle = BRAND
       ctx.lineWidth = 1.5 / s.zoom
       ctx.setLineDash([4 / s.zoom, 4 / s.zoom])
       ctx.fillRect(rx, ry, rw, rh)

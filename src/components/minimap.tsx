@@ -207,10 +207,9 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
     const rh = vpH * scale
 
     ctx.save()
-    const b = 'rgba(59, 130, 246,'
-    ctx.fillStyle = `${b} 0.06)`
+    ctx.fillStyle = 'rgba(232,160,122,0.10)'
     ctx.fillRect(rx, ry, rw, rh)
-    ctx.strokeStyle = `${b} 0.5)`
+    ctx.strokeStyle = 'rgba(232,160,122,0.55)'
     ctx.lineWidth = 1
     ctx.strokeRect(rx, ry, rw, rh)
     ctx.restore()

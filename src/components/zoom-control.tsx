@@ -49,7 +49,7 @@ export function ZoomControl(): ReactNode {
         type="button"
         aria-label="Zoom out"
         onClick={() => animateZoom(zoom - 0.1)}
-        className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
+        className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <circle cx="11" cy="11" r="8" />
@@ -68,7 +68,7 @@ export function ZoomControl(): ReactNode {
         type="button"
         aria-label="Zoom in"
         onClick={() => animateZoom(zoom + 0.1)}
-        className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
+        className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <circle cx="11" cy="11" r="8" />
@@ -85,7 +85,7 @@ export function ZoomControl(): ReactNode {
       <button
         type="button"
         onClick={() => animateZoom(1)}
-        className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
+        className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#e8a07a] dark:hover:text-[#e8a07a]"
       >
         Reset
       </button>

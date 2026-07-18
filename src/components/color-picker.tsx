@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 
 const swatches = [
@@ -14,6 +15,29 @@ interface ColorPickerProps {
   onOpacityChange: (opacity: number) => void
 }
 
+/** Tiny canvas that draws a horizontal line at the given stroke width. */
+function StrokePreview({ width, active }: { width: number; active: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const c = ref.current
+    if (!c) return
+    const dpr = 2
+    c.width = 18 * dpr
+    c.height = 8 * dpr
+    const ctx = c.getContext('2d')!
+    ctx.scale(dpr, dpr)
+    ctx.clearRect(0, 0, 18, 8)
+    ctx.strokeStyle = active ? '#18181b' : '#a1a1aa'
+    ctx.lineWidth = width
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(3, 4)
+    ctx.lineTo(15, 4)
+    ctx.stroke()
+  }, [width, active])
+  return <canvas ref={ref} className="block" style={{ width: 18, height: 8 }} />
+}
+
 export function ColorPicker({
   label,
   color,
@@ -23,8 +47,6 @@ export function ColorPicker({
   onStrokeWidthChange,
   onOpacityChange,
 }: ColorPickerProps): ReactNode {
-  // For stroke, show the native picker + swatches + stroke width + opacity
-  // For fill, show the native picker + swatches (+ no-fill button)
   const showDetails = label === 'stroke'
 
   return (
@@ -66,6 +88,7 @@ export function ColorPicker({
       </div>
       {showDetails && (
         <>
+          {/* ── Stroke width (visual previews) ─────────────── */}
           <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
           <div className="flex items-center gap-px">
             {[1, 2, 4].map((w) => (
@@ -73,34 +96,44 @@ export function ColorPicker({
                 key={w}
                 type="button"
                 onClick={() => onStrokeWidthChange(w)}
-                className={`flex size-4 items-center justify-center rounded-sm text-[9px] font-medium leading-none ${
+                className={`flex size-5 items-center justify-center rounded-sm ${
                   strokeWidth === w
-                    ? 'bg-black/[0.06] text-zinc-700 dark:bg-white/[0.08] dark:text-zinc-200'
-                    : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
+                    ? 'bg-black/[0.06] dark:bg-white/[0.08]'
+                    : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
                 }`}
-                title={`${w}px`}
+                title={`${w}px stroke`}
               >
-                {w}
+                <StrokePreview width={w} active={strokeWidth === w} />
               </button>
             ))}
           </div>
+
+          {/* ── Opacity slider ─────────────────────────────── */}
           <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
-          <div className="flex items-center gap-px">
-            {[60, 80, 100].map((o) => (
-              <button
-                key={o}
-                type="button"
-                onClick={() => onOpacityChange(o)}
-                className={`flex size-4 items-center justify-center rounded-sm text-[9px] font-medium leading-none ${
-                  opacity === o
-                    ? 'bg-black/[0.06] text-zinc-700 dark:bg-white/[0.08] dark:text-zinc-200'
-                    : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
-                }`}
-                title={`${o}%`}
-              >
-                {o}
-              </button>
-            ))}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="range"
+              min={5}
+              max={100}
+              step={1}
+              value={opacity}
+              onChange={(e) => onOpacityChange(Number(e.target.value))}
+              className="
+                h-1 w-16 cursor-pointer appearance-none rounded-full
+                bg-black/[0.08] dark:bg-white/[0.1]
+                accent-zinc-700 dark:accent-zinc-300
+                [&::-webkit-slider-thumb]:size-2.5
+                [&::-webkit-slider-thumb]:appearance-none
+                [&::-webkit-slider-thumb]:rounded-full
+                [&::-webkit-slider-thumb]:bg-zinc-700
+                [&::-webkit-slider-thumb]:shadow-[0_1px_2px_rgba(0,0,0,0.2)]
+                dark:[&::-webkit-slider-thumb]:bg-zinc-200
+              "
+              title={`Opacity: ${opacity}%`}
+            />
+            <span className="min-w-[2ch] text-[10px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
+              {opacity}%
+            </span>
           </div>
         </>
       )}

@@ -15,6 +15,9 @@ function getOrCreateImage(dataUrl: string): HTMLImageElement {
   return img
 }
 
+// ── Brand accent ─────────────────────────────────────────────
+export const BRAND = '#e8a07a'
+
 // ── Seed ─────────────────────────────────────────────────────
 function seedFromId(id: string): number {
   let h = 0
@@ -112,7 +115,7 @@ function renderPencil(rc: RoughCanvas, el: Element) {
   const pts = el.points.map((p) => [p.x, p.y] as [number, number])
   rc.linearPath(pts, {
     ...getDrawOptions(el),
-    roughness: 0.5,
+    roughness: 0.1,
     strokeWidth: el.strokeWidth * 0.5,
   })
 }
@@ -226,7 +229,7 @@ function renderSelectionIndicator(
     ctx.translate(-b.cx, -b.cy)
   }
 
-  ctx.strokeStyle = '#3b82f6'
+  ctx.strokeStyle = BRAND
   ctx.lineWidth = 1 * s
   ctx.setLineDash([3 * s, 4 * s])
   ctx.strokeRect(x - 2 * s, y - 2 * s, w + 4 * s, h + 4 * s)
@@ -245,7 +248,7 @@ function renderSelectionIndicator(
   ]
 
   ctx.fillStyle = '#ffffff'
-  ctx.strokeStyle = '#3b82f6'
+  ctx.strokeStyle = BRAND
   ctx.lineWidth = 1.5 * s
   for (const p of pts) {
     ctx.beginPath()
@@ -257,7 +260,7 @@ function renderSelectionIndicator(
   // ── Rotation handle ───────────────────────────────────────
   const rotX = x + w / 2
   const rotY = y - 24 * s
-  ctx.strokeStyle = '#3b82f6'
+  ctx.strokeStyle = BRAND
   ctx.lineWidth = 1 * s
   ctx.setLineDash([])
   ctx.beginPath()
@@ -269,7 +272,7 @@ function renderSelectionIndicator(
   ctx.arc(rotX, rotY, 4 * s, 0, Math.PI * 2)
   ctx.fillStyle = '#ffffff'
   ctx.fill()
-  ctx.strokeStyle = '#3b82f6'
+  ctx.strokeStyle = BRAND
   ctx.lineWidth = 1.5 * s
   ctx.stroke()
 
@@ -430,7 +433,7 @@ function renderSVGElement(
       const pts = el.points.map((p) => [p.x, p.y] as [number, number])
       const node = rc.linearPath(pts, {
         ...options,
-        roughness: 0.5,
+        roughness: 0.1,
         strokeWidth: el.strokeWidth * 0.5,
       })
       container.appendChild(node)

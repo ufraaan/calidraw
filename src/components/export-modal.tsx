@@ -33,7 +33,7 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
       disabled
         ? 'cursor-default text-zinc-300 dark:text-zinc-600'
         : active
-          ? 'bg-black/[0.04] text-zinc-800 dark:bg-white/[0.06] dark:text-zinc-100'
+          ? 'bg-[#e8a07a]/10 text-[#e8a07a] dark:bg-[#e8a07a]/15 dark:text-[#e8a07a]'
           : 'text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'
     }`
 
