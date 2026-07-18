@@ -38,7 +38,7 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
     }`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 dark:bg-black/50" onClick={onClose}>
       <div
         className={`flex flex-col gap-3 rounded-lg ${glass} px-3 py-3 w-[260px]`}
         onClick={(e) => e.stopPropagation()}
