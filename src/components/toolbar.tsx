@@ -7,7 +7,6 @@ import {
   setOpacity,
   setBowing,
 } from '../stores/canvas-store'
-import { IconButton } from './ui/icon-button'
 import type { ReactNode } from 'react'
 import type { Tool, Element } from '../types'
 import {
@@ -73,15 +72,22 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
       {/* Left tool strip */}
       <div className="pointer-events-auto absolute left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-px rounded-lg border border-black/[0.06] bg-white/95 p-1 backdrop-blur-xl shadow-[0_4px_16px_-4px_rgba(0,0,0,0.10),0_1px_3px_-1px_rgba(0,0,0,0.06)] dark:border-white/[0.08] dark:bg-zinc-900/95 dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.35),0_1px_3px_-1px_rgba(0,0,0,0.2)]">
         {tools.map((t) => (
-          <IconButton
+          <button
             key={t.tool}
-            active={activeTool === t.tool}
+            type="button"
             onClick={() => setTool(t.tool)}
             title={`${t.label} — ${t.shortcut}`}
-            size="xs"
+            className={`relative flex flex-col items-center justify-center rounded-md transition-all duration-100 active:scale-95 size-7 ${
+              activeTool === t.tool
+                ? 'bg-[#e8a07a]/15 text-[#e8a07a] dark:bg-[#e8a07a]/20 dark:text-[#e8a07a]'
+                : 'text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'
+            }`}
           >
-            {t.icon}
-          </IconButton>
+            <span className="mt-0.5">{t.icon}</span>
+            <span className="text-[6px] font-semibold uppercase leading-none opacity-50 -mt-0.5">
+              {t.shortcut}
+            </span>
+          </button>
         ))}
       </div>
 

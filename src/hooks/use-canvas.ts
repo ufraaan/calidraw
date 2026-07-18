@@ -450,6 +450,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
           fontSize: 20,
         }
         onElementCreate(el)
+        // Auto-switch to select so the text editor can take focus
         setTool('select')
         return
       }
@@ -669,14 +670,17 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Drawing complete — stay on current tool (user chose it, they'll use it again)
+      // Drawing complete — auto-switch to select, except pencil
+      // (pencil stays on itself so you can sketch consecutive strokes)
       if (isShapeTool(tool as Tool)) {
         transientRef.current = []
         scheduleDraw()
         const el = endDrawing()
         if (el) {
           onElementCreate(el)
-          // Don't switch to select — pencil/pen users want to keep drawing
+          if (tool !== 'pencil') {
+            setTool('select')
+          }
         }
       }
     },
