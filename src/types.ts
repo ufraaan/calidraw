@@ -6,6 +6,7 @@ export type ElementType =
   | 'line'
   | 'pencil'
   | 'text'
+  | 'image'
 
 export interface Point {
   x: number
@@ -30,6 +31,7 @@ export interface Element {
   text?: string
   fontFamily?: string
   fontSize?: number
+  imageData?: string
 }
 
 export type Tool =

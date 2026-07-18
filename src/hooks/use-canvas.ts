@@ -162,22 +162,22 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       }
 
       if (tool === 'select') {
-        const selectedEl =
+        const firstSelected =
           selectedRef.current.length > 0
             ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
             : undefined
 
-        // 1) Check resize handles on the selected element
-        if (selectedEl) {
-          const handle = hitTestResizeHandle(point, selectedEl)
+        // 1) Check resize handles on the first selected element
+        if (firstSelected) {
+          const handle = hitTestResizeHandle(point, firstSelected)
           if (handle) {
             resizeHandleRef.current = handle
-            dragOriginRef.current = { point, el: { ...selectedEl } }
+            dragOriginRef.current = { point, el: { ...firstSelected } }
             return
           }
         }
 
-        // 2) Check for element hit (drag or alt-duplicate)
+        // 2) Check for element hit (drag, multi-select, or alt-duplicate)
         const hit = [...elementsRef.current].reverse().find((el) => hitTest(point, el))
         if (hit) {
           if (e.altKey) {
@@ -186,6 +186,17 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
             onElementCreate(clone)
             setSelectedIds([clone.id])
             dragOriginRef.current = { point, el: clone }
+          } else if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + click = toggle selection
+            const alreadySelected = selectedRef.current.includes(hit.id)
+            const next = alreadySelected
+              ? selectedRef.current.filter((id) => id !== hit.id)
+              : [...selectedRef.current, hit.id]
+            setSelectedIds(next)
+            if (next.length > 0) {
+              // Start dragging the clicked element
+              dragOriginRef.current = { point, el: { ...hit } }
+            }
           } else {
             setSelectedIds([hit.id])
             dragOriginRef.current = { point, el: { ...hit } }

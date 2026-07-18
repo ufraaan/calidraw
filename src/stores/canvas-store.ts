@@ -15,11 +15,25 @@ export interface CanvasState {
   selectedIds: string[]
 }
 
+const POV_KEY = 'calidraw-pov'
+
+function loadPOV(): { zoom: number; offsetX: number; offsetY: number } | null {
+  try {
+    const raw = localStorage.getItem(POV_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+const saved = loadPOV()
+
 const initialState: CanvasState = {
   tool: 'select',
-  zoom: 1,
-  offsetX: 0,
-  offsetY: 0,
+  zoom: saved?.zoom ?? 1,
+  offsetX: saved?.offsetX ?? 0,
+  offsetY: saved?.offsetY ?? 0,
   strokeColor: '#1e1e1e',
   backgroundColor: 'transparent',
   strokeWidth: 2,
@@ -30,6 +44,14 @@ const initialState: CanvasState = {
 }
 
 export const canvasStore = createStore(initialState)
+
+function savePOV() {
+  const s = canvasStore.state
+  localStorage.setItem(
+    POV_KEY,
+    JSON.stringify({ zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY }),
+  )
+}
 
 export function setTool(tool: Tool) {
   canvasStore.setState((s) => ({ ...s, tool }))
@@ -47,10 +69,12 @@ export function zoomAtPoint(newZoom: number, cx?: number, cy?: number) {
     offsetX: px - canvasX * newZoom,
     offsetY: py - canvasY * newZoom,
   }))
+  savePOV()
 }
 
 export function setOffset(offsetX: number, offsetY: number) {
   canvasStore.setState((s) => ({ ...s, offsetX, offsetY }))
+  savePOV()
 }
 
 export function setStrokeColor(color: string) {

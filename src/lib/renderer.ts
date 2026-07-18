@@ -2,6 +2,20 @@ import rough from 'roughjs'
 import type { RoughCanvas } from 'roughjs/bin/canvas'
 import type { Element, Point } from '../types'
 
+// ── Image cache ─────────────────────────────────────────────
+const imageCache = new Map<string, HTMLImageElement>()
+
+function getOrCreateImage(dataUrl: string): HTMLImageElement {
+  let img = imageCache.get(dataUrl)
+  if (!img) {
+    img = new Image()
+    img.src = dataUrl
+    imageCache.set(dataUrl, img)
+  }
+  return img
+}
+
+// ── Seed ─────────────────────────────────────────────────────
 function seedFromId(id: string): number {
   let h = 0
   for (let i = 0; i < id.length; i++) {
@@ -11,6 +25,7 @@ function seedFromId(id: string): number {
   return Math.abs(h)
 }
 
+// ── Draw options ─────────────────────────────────────────────
 function getDrawOptions(element: Element) {
   return {
     stroke: element.strokeColor,
@@ -31,6 +46,7 @@ function getDrawOptions(element: Element) {
   }
 }
 
+// ── Shape renderers ──────────────────────────────────────────
 function renderRectangle(rc: RoughCanvas, el: Element) {
   const options = getDrawOptions(el)
   const x = el.width >= 0 ? el.x : el.x + el.width
@@ -111,6 +127,21 @@ function renderText(ctx: CanvasRenderingContext2D, el: Element) {
   ctx.restore()
 }
 
+function renderImage(ctx: CanvasRenderingContext2D, el: Element) {
+  if (!el.imageData) return
+  const img = getOrCreateImage(el.imageData)
+  if (!img.complete) return
+  const x = el.width >= 0 ? el.x : el.x + el.width
+  const y = el.height >= 0 ? el.y : el.y + el.height
+  const w = Math.abs(el.width)
+  const h = Math.abs(el.height)
+  ctx.save()
+  ctx.globalAlpha = el.opacity / 100
+  ctx.drawImage(img, x, y, w, h)
+  ctx.restore()
+}
+
+// ── Scene ────────────────────────────────────────────────────
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   elements: Element[],
@@ -146,6 +177,9 @@ export function renderScene(
       case 'text':
         renderText(ctx, el)
         break
+      case 'image':
+        renderImage(ctx, el)
+        break
     }
 
     ctx.restore()
@@ -156,6 +190,7 @@ export function renderScene(
   }
 }
 
+// ── Selection indicator ──────────────────────────────────────
 function renderSelectionIndicator(
   ctx: CanvasRenderingContext2D,
   el: Element,
@@ -195,4 +230,74 @@ function renderSelectionIndicator(
     ctx.strokeRect(p.x - half, p.y - half, half * 2, half * 2)
   }
   ctx.restore()
+}
+
+// ── Offscreen render for export / clipboard ──────────────────
+export function renderElementsToCanvas(
+  elements: Element[],
+  selectedIds: Set<string>,
+): HTMLCanvasElement {
+  // Compute bounding box
+  if (elements.length === 0) {
+    const c = document.createElement('canvas')
+    c.width = 1
+    c.height = 1
+    return c
+  }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const el of elements) {
+    const ex = el.width >= 0 ? el.x : el.x + el.width
+    const ey = el.height >= 0 ? el.y : el.y + el.height
+    const ew = Math.abs(el.width)
+    const eh = Math.abs(el.height)
+    if (ex < minX) minX = ex
+    if (ey < minY) minY = ey
+    if (ex + ew > maxX) maxX = ex + ew
+    if (ey + eh > maxY) maxY = ey + eh
+  }
+
+  const pad = 20
+  const w = Math.ceil(maxX - minX + pad * 2)
+  const h = Math.ceil(maxY - minY + pad * 2)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = w * 2 // 2x for retina
+  canvas.height = h * 2
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(2, 2)
+  ctx.translate(-minX + pad, -minY + pad)
+
+  renderScene(ctx, elements, selectedIds)
+  return canvas
+}
+
+export async function copyToClipboardAsPNG(elements: Element[], ids: string[]) {
+  const toRender = ids.length > 0
+    ? elements.filter((e) => ids.includes(e.id))
+    : elements
+  const canvas = renderElementsToCanvas(toRender, new Set(ids))
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/png'),
+  )
+  if (!blob) return
+  await navigator.clipboard.write([
+    new ClipboardItem({ 'image/png': blob }),
+  ])
+}
+
+export function downloadAsPNG(elements: Element[], ids: string[], filename: string) {
+  const toRender = ids.length > 0
+    ? elements.filter((e) => ids.includes(e.id))
+    : elements
+  const canvas = renderElementsToCanvas(toRender, new Set(ids))
+  canvas.toBlob((blob) => {
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }, 'image/png')
 }
