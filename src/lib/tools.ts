@@ -168,10 +168,6 @@ export function endDrawing(): Element | null {
   return element
 }
 
-function getDrawState() {
-  return drawState
-}
-
 export function isShapeTool(tool: Tool): boolean {
   return ['rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'pencil'].includes(tool)
 }

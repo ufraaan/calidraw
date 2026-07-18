@@ -14,8 +14,7 @@
     "dexie": "^4.0.11",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "roughjs": "^4.6.6",
-    "zod": "^3.24.4"
+    "roughjs": "^4.6.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",

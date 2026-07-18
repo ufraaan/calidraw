@@ -24,29 +24,6 @@ export function hitTest(point: Point, element: Element): boolean {
   return pointInBounds(point, bounds)
 }
 
-function getCommonBounds(elements: Element[]): Bounds | null {
-  if (elements.length === 0) return null
-
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-
-  for (const el of elements) {
-    const b = getElementBounds(el)
-    minX = Math.min(minX, b.minX)
-    minY = Math.min(minY, b.minY)
-    maxX = Math.max(maxX, b.maxX)
-    maxY = Math.max(maxY, b.maxY)
-  }
-
-  return { minX, minY, maxX, maxY }
-}
-
-function distance(a: Point, b: Point): number {
-  return Math.hypot(b.x - a.x, b.y - a.y)
-}
-
 export function generateId(): string {
   return crypto.randomUUID()
 }
