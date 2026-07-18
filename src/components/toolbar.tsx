@@ -5,6 +5,7 @@ import {
   setBackgroundColor,
   setStrokeWidth,
   setOpacity,
+  setBowing,
 } from '../stores/canvas-store'
 import { IconButton } from './ui/icon-button'
 import type { ReactNode } from 'react'
@@ -48,6 +49,7 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
   const storeFill = useSelector(canvasStore, (s) => s.backgroundColor)
   const storeWidth = useSelector(canvasStore, (s) => s.strokeWidth)
   const storeOpacity = useSelector(canvasStore, (s) => s.opacity)
+  const storeBowing = useSelector(canvasStore, (s) => s.bowing)
 
   const selectedElement = selectedIds.length === 1
     ? elements.find((e) => e.id === selectedIds[0]) ?? null
@@ -58,6 +60,7 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
   const fillColor = selectedElement?.backgroundColor ?? storeFill
   const strokeWidth = selectedElement?.strokeWidth ?? storeWidth
   const opacity = selectedElement?.opacity ?? storeOpacity
+  const bowing = selectedElement?.bowing ?? storeBowing
 
   function updateElement(partial: Partial<Element>) {
     if (selectedElement) {
@@ -90,6 +93,7 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
           color={strokeColor}
           strokeWidth={strokeWidth}
           opacity={opacity}
+          bowing={bowing}
           onColorChange={(c) => {
             setStrokeColor(c)
             updateElement({ strokeColor: c })
@@ -102,6 +106,10 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
             setOpacity(o)
             updateElement({ opacity: o })
           }}
+          onBowingChange={(b) => {
+            setBowing(b)
+            updateElement({ bowing: b })
+          }}
         />
         <div className="w-px h-4 bg-black/[0.06] dark:bg-white/[0.06]" />
         <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Fill</span>
@@ -110,12 +118,14 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
           color={fillColor}
           strokeWidth={1}
           opacity={100}
+          bowing={1}
           onColorChange={(c) => {
             setBackgroundColor(c)
             updateElement({ backgroundColor: c })
           }}
           onStrokeWidthChange={() => {}}
           onOpacityChange={() => {}}
+          onBowingChange={() => {}}
         />
       </div>
     </>

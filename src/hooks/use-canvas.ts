@@ -3,6 +3,7 @@ import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setSelectedIds, setOffset, setTool, zoomAtPoint } from '../stores/canvas-store'
 import { renderScene, BRAND } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
+import { LaserPointer } from '@excalidraw/laser-pointer'
 import { hitTest, hitTestResizeHandle, getResizedElement, hitTestRotationHandle, getRotationAngle, generateId, getElementBounds, pointInBounds } from '../lib/geometry'
 import type { Element, Point, Tool } from '../types'
 import type { ResizeHandle } from '../lib/geometry'
@@ -55,6 +56,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   const marqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const hoveredElRef = useRef<string | null>(null)
   const cursorPosRef = useRef<Point | null>(null)
+  const laserPointsRef = useRef<Point[]>([])
   const rafRef = useRef(0)
 
   useEffect(() => {
@@ -143,6 +145,36 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       ctx.fillStyle = '#fff'
       ctx.fillText(label, cx, ly + lh - 5)
       ctx.restore()
+    }
+
+    // Laser pointer trail
+    const laserPts = laserPointsRef.current
+    if (laserPts.length >= 2) {
+      const stroke = new LaserPointer({ size: 3 })
+      for (const p of laserPts) {
+        stroke.addPoint([p.x, p.y, 1])
+      }
+      stroke.close()
+      const outline = stroke.getStrokeOutline()
+      if (outline.length >= 3) {
+        ctx.save()
+        // Glow layer
+        ctx.shadowColor = 'rgba(239,68,68,0.6)'
+        ctx.shadowBlur = 24 / s.zoom
+        ctx.beginPath()
+        ctx.moveTo(outline[0][0], outline[0][1])
+        for (let i = 1; i < outline.length; i++) {
+          ctx.lineTo(outline[i][0], outline[i][1])
+        }
+        ctx.closePath()
+        ctx.fillStyle = '#ef4444'
+        ctx.fill()
+        // Core layer (brighter center)
+        ctx.shadowColor = 'transparent'
+        ctx.globalAlpha = 0.6
+        ctx.fill()
+        ctx.restore()
+      }
     }
 
     ctx.restore()
@@ -395,6 +427,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
           strokeWidth: 0,
           strokeStyle: 'solid',
           roughness: 0,
+          bowing: 0,
           opacity: state.opacity,
           text: '',
           fontFamily: 'sans-serif',
@@ -402,6 +435,13 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         }
         onElementCreate(el)
         setTool('select')
+        return
+      }
+
+      if (tool === 'laser') {
+        laserPointsRef.current = [point]
+        transientRef.current = []
+        scheduleDraw()
         return
       }
 
@@ -516,6 +556,13 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         }
       }
 
+      // Laser pointer trail
+      if (tool === 'laser' && laserPointsRef.current.length > 0) {
+        laserPointsRef.current.push(point)
+        scheduleDraw()
+        return
+      }
+
       // Drawing preview
       if (isShapeTool(tool as Tool)) {
         const partial = updateDrawing(point)
@@ -597,6 +644,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       // Laser pointer — never commits to elements
       if (tool === 'laser') {
         transientRef.current = []
+        laserPointsRef.current = []
         scheduleDraw()
         return
       }

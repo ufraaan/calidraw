@@ -17,6 +17,7 @@ export interface CanvasState {
   strokeStyle: 'solid' | 'dashed' | 'dotted'
   opacity: number
   roughness: number
+  bowing: number
   selectedIds: string[]
   saveStatus: SaveStatus
 }
@@ -54,6 +55,7 @@ const initialState: CanvasState = {
   strokeStyle: 'solid',
   opacity: 100,
   roughness: 1,
+  bowing: 1,
   selectedIds: [],
   saveStatus: 'idle',
 }
@@ -106,6 +108,10 @@ export function setStrokeWidth(width: number) {
 
 export function setOpacity(opacity: number) {
   canvasStore.setState((s) => ({ ...s, opacity }))
+}
+
+export function setBowing(bowing: number) {
+  canvasStore.setState((s) => ({ ...s, bowing }))
 }
 
 export function setSelectedIds(ids: string[]) {

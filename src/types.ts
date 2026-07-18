@@ -26,6 +26,7 @@ export interface Element {
   strokeWidth: number
   strokeStyle: 'solid' | 'dashed' | 'dotted'
   roughness: number
+  bowing: number
   opacity: number
   points?: Point[]
   text?: string

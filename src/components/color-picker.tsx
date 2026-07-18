@@ -10,9 +10,11 @@ interface ColorPickerProps {
   color: string
   strokeWidth: number
   opacity: number
+  bowing: number
   onColorChange: (color: string) => void
   onStrokeWidthChange: (width: number) => void
   onOpacityChange: (opacity: number) => void
+  onBowingChange: (bowing: number) => void
 }
 
 /** Tiny canvas that draws a horizontal line at the given stroke width. */
@@ -38,14 +40,42 @@ function StrokePreview({ width, active }: { width: number; active: boolean }) {
   return <canvas ref={ref} className="block" style={{ width: 18, height: 8 }} />
 }
 
+/** Tiny canvas that draws a wavy line showing a bowing level. */
+function BowingPreview({ bowing, active }: { bowing: number; active: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const c = ref.current
+    if (!c) return
+    const dpr = 2
+    c.width = 18 * dpr
+    c.height = 10 * dpr
+    const ctx = c.getContext('2d')!
+    ctx.scale(dpr, dpr)
+    ctx.clearRect(0, 0, 18, 10)
+    ctx.strokeStyle = active ? '#18181b' : '#a1a1aa'
+    ctx.lineWidth = 1.2
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    const amp = bowing * 0.6 // wave amplitude scales with bowing
+    for (let x = 2; x <= 16; x += 0.5) {
+      const y = 5 + Math.sin((x - 2) * 1.2) * amp
+      x === 2 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+  }, [bowing, active])
+  return <canvas ref={ref} className="block" style={{ width: 18, height: 10 }} />
+}
+
 export function ColorPicker({
   label,
   color,
   strokeWidth,
   opacity,
+  bowing,
   onColorChange,
   onStrokeWidthChange,
   onOpacityChange,
+  onBowingChange,
 }: ColorPickerProps): ReactNode {
   const showDetails = label === 'stroke'
 
@@ -134,6 +164,34 @@ export function ColorPicker({
             <span className="min-w-[2ch] text-[10px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
               {opacity}%
             </span>
+          </div>
+
+          {/* ── Bowing presets ────────────────────────────── */}
+          <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
+          <div className="flex items-center gap-px">
+            {[
+              { value: 0, label: 'off' },
+              { value: 1, label: 'natural' },
+              { value: 3, label: 'wavy' },
+              { value: 6, label: 'loose' },
+            ].map((b) => (
+              <button
+                key={b.value}
+                type="button"
+                onClick={() => onBowingChange(b.value)}
+                className={`flex flex-col items-center gap-[1px] rounded-sm px-1 py-0.5 text-[8px] font-medium leading-none transition-colors ${
+                  bowing === b.value
+                    ? 'bg-black/[0.06] dark:bg-white/[0.08]'
+                    : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
+                }`}
+                title={`Bowing: ${b.label}`}
+              >
+                <BowingPreview bowing={b.value} active={bowing === b.value} />
+                <span className={bowing === b.value ? 'text-zinc-600 dark:text-zinc-300' : 'text-zinc-400 dark:text-zinc-500'}>
+                  {b.label}
+                </span>
+              </button>
+            ))}
           </div>
         </>
       )}

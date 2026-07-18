@@ -34,6 +34,7 @@ export function getDrawOptions(element: Element) {
     stroke: element.strokeColor,
     strokeWidth: element.strokeWidth,
     roughness: element.roughness,
+    bowing: element.bowing,
     seed: seedFromId(element.id),
     strokeLineDash:
       element.strokeStyle === 'dashed'

@@ -365,6 +365,7 @@ export function CanvasView(): ReactNode {
                 strokeWidth: 0,
                 strokeStyle: 'solid',
                 roughness: 0,
+                bowing: 0,
                 opacity: 100,
                 imageData: dataUrl,
               }
@@ -453,6 +454,7 @@ export function CanvasView(): ReactNode {
       strokeStyle: selectedElement.strokeStyle,
       opacity: selectedElement.opacity,
       roughness: selectedElement.roughness,
+      bowing: selectedElement.bowing,
     })
     closeCtxMenu()
   }, [selectedElement, closeCtxMenu])

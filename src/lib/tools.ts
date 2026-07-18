@@ -51,29 +51,13 @@ export function updateDrawing(point: Point): Partial<Element> | null {
       strokeColor: state.strokeColor,
       strokeWidth: state.strokeWidth,
       roughness: state.roughness,
+      bowing: state.bowing,
       opacity: state.opacity,
       x: 0,
       y: 0,
       width: 0,
       height: 0,
       points: previewPoints,
-    }
-  }
-
-  if (state.tool === 'laser') {
-    return {
-      type: 'line',
-      strokeColor: '#ef4444',
-      backgroundColor: 'transparent',
-      strokeWidth: 2,
-      strokeStyle: 'solid' as const,
-      roughness: 0,
-      opacity: 70,
-      x: 0,
-      y: 0,
-      width: 0,
-      height: 0,
-      points: [{ ...drawState.points[0] }, { ...point }],
     }
   }
 
@@ -84,6 +68,7 @@ export function updateDrawing(point: Point): Partial<Element> | null {
     strokeStyle: state.strokeStyle,
     opacity: state.opacity,
     roughness: state.roughness,
+    bowing: state.bowing,
   }
 
   switch (state.tool) {
@@ -129,6 +114,7 @@ export function endDrawing(): Element | null {
     strokeStyle: state.strokeStyle,
     opacity: state.opacity,
     roughness: state.roughness,
+    bowing: state.bowing,
   }
 
   let element: Element

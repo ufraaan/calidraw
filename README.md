@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="og-image.png" alt="calidraw" width="600">
+  <img src="public/og-image.png" alt="calidraw" width="600">
 </p>
 
 <p align="center">
