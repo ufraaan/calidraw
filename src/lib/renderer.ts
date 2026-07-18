@@ -2,11 +2,21 @@ import rough from 'roughjs'
 import type { RoughCanvas } from 'roughjs/bin/canvas'
 import type { Element, Point } from '../types'
 
+function seedFromId(id: string): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) {
+    h = ((h << 5) - h) + id.charCodeAt(i)
+    h |= 0
+  }
+  return Math.abs(h)
+}
+
 function getDrawOptions(element: Element) {
   return {
     stroke: element.strokeColor,
     strokeWidth: element.strokeWidth,
     roughness: element.roughness,
+    seed: seedFromId(element.id),
     strokeLineDash:
       element.strokeStyle === 'dashed'
         ? [8, 8]
