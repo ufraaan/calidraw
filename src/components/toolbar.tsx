@@ -66,7 +66,7 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
   return (
     <>
       {/* Left tool strip */}
-      <div className="pointer-events-auto absolute left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-px rounded-lg border border-black/[0.04] bg-white/70 p-1 backdrop-blur-xl shadow-[0_1px_4px_-2px_rgba(0,0,0,0.08)] dark:border-white/[0.06] dark:bg-zinc-900/70 dark:shadow-[0_1px_4px_-2px_rgba(0,0,0,0.3)]">
+      <div className="pointer-events-auto absolute left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-px rounded-lg border border-black/[0.06] bg-white/95 p-1 backdrop-blur-xl shadow-[0_1px_6px_-2px_rgba(0,0,0,0.10)] dark:border-white/[0.08] dark:bg-zinc-900/95 dark:shadow-[0_1px_6px_-2px_rgba(0,0,0,0.3)]">
         {tools.map((t) => (
           <IconButton
             key={t.tool}
@@ -81,7 +81,7 @@ export function Toolbar({ elements, onElementUpdate }: ToolbarProps): ReactNode 
       </div>
 
       {/* Bottom bar */}
-      <div className="pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-lg border border-black/[0.04] bg-white/70 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_1px_4px_-2px_rgba(0,0,0,0.08)] dark:border-white/[0.06] dark:bg-zinc-900/70 dark:shadow-[0_1px_4px_-2px_rgba(0,0,0,0.3)]">
+      <div className="pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-lg border border-black/[0.06] bg-white/95 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_1px_6px_-2px_rgba(0,0,0,0.10)] dark:border-white/[0.08] dark:bg-zinc-900/95 dark:shadow-[0_1px_6px_-2px_rgba(0,0,0,0.3)]">
         <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Stroke</span>
         <ColorPicker
           label="stroke"
