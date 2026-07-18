@@ -150,17 +150,34 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     // Laser pointer trail
     const laserPts = laserPointsRef.current
     if (laserPts.length >= 2) {
-      const stroke = new LaserPointer({ size: 3 })
-      for (const p of laserPts) {
+      // Keep only the most recent points — trail has a max visible length.
+      // As you move further from where you started, old points drop off,
+      // creating the "snake tail" effect.
+      const maxTrail = 60
+      const recent = laserPts.length > maxTrail
+        ? laserPts.slice(laserPts.length - maxTrail)
+        : laserPts
+
+      // `sizeMapping` controls how thick the stroke is at each point.
+      // `currentIndex / totalLength` = 0 at tail (oldest point), 1 at head (cursor).
+      // This creates a taper: tail is thin/fading, cursor end is full thickness.
+      const stroke = new LaserPointer({
+        size: 3,
+        streamline: 0.35,
+        simplify: 0.04,
+        keepHead: false,
+        sizeMapping: (d) => d.currentIndex / d.totalLength,
+      })
+      for (const p of recent) {
         stroke.addPoint([p.x, p.y, 1])
       }
       stroke.close()
       const outline = stroke.getStrokeOutline()
       if (outline.length >= 3) {
         ctx.save()
-        // Glow layer
-        ctx.shadowColor = 'rgba(239,68,68,0.6)'
-        ctx.shadowBlur = 24 / s.zoom
+        // Glow
+        ctx.shadowColor = 'rgba(239,68,68,0.5)'
+        ctx.shadowBlur = 20 / s.zoom
         ctx.beginPath()
         ctx.moveTo(outline[0][0], outline[0][1])
         for (let i = 1; i < outline.length; i++) {
@@ -169,9 +186,8 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         ctx.closePath()
         ctx.fillStyle = '#ef4444'
         ctx.fill()
-        // Core layer (brighter center)
+        // Core layer (no shadow, bright center)
         ctx.shadowColor = 'transparent'
-        ctx.globalAlpha = 0.6
         ctx.fill()
         ctx.restore()
       }
@@ -559,6 +575,10 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       // Laser pointer trail
       if (tool === 'laser' && laserPointsRef.current.length > 0) {
         laserPointsRef.current.push(point)
+        // Keep the buffer bounded
+        if (laserPointsRef.current.length > 200) {
+          laserPointsRef.current = laserPointsRef.current.slice(-100)
+        }
         scheduleDraw()
         return
       }
