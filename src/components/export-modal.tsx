@@ -18,7 +18,6 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
   const handleExport = () => {
     const ids = mode === 'selection' ? selectedIds : []
     const label = mode === 'selection' ? 'selection' : 'canvas'
-
     if (format === 'svg') {
       downloadAsSVG(elements, ids, `calidraw-${label}.svg`)
     } else {
@@ -27,48 +26,36 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
     onClose()
   }
 
-  const btnClass = (active: boolean, disabled = false) =>
-    `flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-100 ${
+  const glass = 'bg-white/70 backdrop-blur-xl border border-black/[0.04] shadow-[0_1px_4px_-2px_rgba(0,0,0,0.08)] dark:bg-zinc-900/70 dark:border-white/[0.06] dark:shadow-[0_1px_4px_-2px_rgba(0,0,0,0.3)]'
+
+  const btn = (active: boolean, disabled = false) =>
+    `flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-100 active:scale-95 ${
       disabled
         ? 'cursor-default text-zinc-300 dark:text-zinc-600'
         : active
-          ? 'bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900'
-          : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800'
+          ? 'bg-black/[0.04] text-zinc-800 dark:bg-white/[0.06] dark:text-zinc-100'
+          : 'text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'
     }`
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onClose}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/[0.04] dark:bg-black/40" />
-
-      {/* Panel */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div
-        className="relative w-[280px] rounded-xl border border-zinc-200/80 bg-white p-5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)]"
+        className={`flex flex-col gap-3 rounded-lg ${glass} px-3 py-3 w-[260px]`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Title */}
-        <div className="mb-5 text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">
+        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
           Export
-        </div>
+        </span>
 
         {/* Mode */}
-        <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Export
-        </div>
-        <div className="mb-4 flex gap-1.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
-          <button
-            type="button"
-            className={btnClass(mode === 'all')}
-            onClick={() => setMode('all')}
-          >
+        <div className="flex gap-1.5">
+          <button type="button" className={btn(mode === 'all')} onClick={() => setMode('all')}>
             Entire canvas
           </button>
           <button
             type="button"
-            className={btnClass(mode === 'selection', !canSelectSelection)}
+            className={btn(mode === 'selection', !canSelectSelection)}
             disabled={!canSelectSelection}
             onClick={() => canSelectSelection && setMode('selection')}
           >
@@ -76,61 +63,43 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
           </button>
         </div>
 
-        {/* Scale (PNG only) */}
+        {/* Scale — PNG only */}
         {format === 'png' && (
-          <>
-            <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              Scale
-            </div>
-            <div className="mb-4 flex gap-1.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
-              {[1, 2, 3].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={btnClass(scale === s)}
-                  onClick={() => setScale(s)}
-                >
-                  {s}×
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="flex gap-1.5">
+            {[1, 2, 3].map((s) => (
+              <button key={s} type="button" className={btn(scale === s)} onClick={() => setScale(s)}>
+                {s}×
+              </button>
+            ))}
+          </div>
         )}
 
         {/* Format */}
-        <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-          Format
-        </div>
-        <div className="mb-5 flex gap-1.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
-          <button
-            type="button"
-            className={btnClass(format === 'png')}
-            onClick={() => setFormat('png')}
-          >
+        <div className="flex gap-1.5">
+          <button type="button" className={btn(format === 'png')} onClick={() => setFormat('png')}>
             PNG
           </button>
-          <button
-            type="button"
-            className={btnClass(format === 'svg')}
-            onClick={() => setFormat('svg')}
-          >
+          <button type="button" className={btn(format === 'svg')} onClick={() => setFormat('svg')}>
             SVG
           </button>
         </div>
 
+        {/* Divider */}
+        <div className="w-full h-px bg-black/[0.06] dark:bg-white/[0.06]" />
+
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg px-3 py-2 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            className="flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 dark:text-zinc-500 dark:hover:text-zinc-200"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleExport}
-            className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-all duration-100 hover:bg-zinc-800 active:scale-[0.97] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+            className="flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 dark:text-zinc-500 dark:hover:text-zinc-200"
           >
             Export
           </button>
