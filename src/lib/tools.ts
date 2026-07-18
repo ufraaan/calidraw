@@ -130,14 +130,22 @@ export function endDrawing(): Element | null {
       break
     }
     case 'pencil': {
+      const pts = [...drawState.points]
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (const p of pts) {
+        if (p.x < minX) minX = p.x
+        if (p.y < minY) minY = p.y
+        if (p.x > maxX) maxX = p.x
+        if (p.y > maxY) maxY = p.y
+      }
       element = {
         ...base,
         type: 'pencil',
-        x: startPoint.x,
-        y: startPoint.y,
-        width: 0,
-        height: 0,
-        points: [...drawState.points],
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+        points: pts,
       }
       break
     }

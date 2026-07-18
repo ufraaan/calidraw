@@ -1,4 +1,5 @@
 import type { Element, Point, Bounds } from '../types'
+import { canvasStore } from '../stores/canvas-store'
 
 export function getElementBounds(element: Element): Bounds {
   const { x, y, width, height } = element
@@ -19,7 +20,34 @@ export function pointInBounds(point: Point, bounds: Bounds): boolean {
   )
 }
 
+function distToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const abx = bx - ax
+  const aby = by - ay
+  const apx = px - ax
+  const apy = py - ay
+  const dot = apx * abx + apy * aby
+  const len2 = abx * abx + aby * aby
+  let t = len2 === 0 ? 0 : Math.max(0, Math.min(1, dot / len2))
+  const cx = ax + t * abx
+  const cy = ay + t * aby
+  const dx = px - cx
+  const dy = py - cy
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
 export function hitTest(point: Point, element: Element): boolean {
+  // Path-based elements (pencil, line) — test proximity to the drawn segments
+  if (element.points && element.points.length >= 2) {
+    const threshold = 12 / Math.max(1, (canvasStore?.state?.zoom ?? 1))
+    for (let i = 1; i < element.points.length; i++) {
+      const a = element.points[i - 1]
+      const b = element.points[i]
+      if (distToSegment(point.x, point.y, a.x, a.y, b.x, b.y) < threshold) return true
+    }
+    return false
+  }
+
+  // Bounding-box test for everything else
   const bounds = getElementBounds(element)
   return pointInBounds(point, bounds)
 }
