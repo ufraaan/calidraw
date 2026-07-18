@@ -14,6 +14,7 @@ import { ZoomControl } from './zoom-control'
 import { ContextMenu, MenuItem, MenuSeparator } from './context-menu'
 import { ExportModal } from './export-modal'
 import { TextEditor } from './text-editor'
+import { Minimap } from './minimap'
 import { copyToClipboardAsPNG } from '../lib/renderer'
 import { generateId, getNormalizedBounds } from '../lib/geometry'
 import { IconDownload } from '@tabler/icons-react'
@@ -619,6 +620,7 @@ export function CanvasView(): ReactNode {
         </button>
       </div>
 
+      <Minimap elements={elements} />
       <Toolbar elements={elements} onElementUpdate={upsertElement} />
       <ZoomControl />
 
