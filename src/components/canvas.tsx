@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useSelector } from '@tanstack/react-store'
-import { canvasStore, setSelectedIds, triggerSaveStatus } from '../stores/canvas-store'
+import { canvasStore, setSelectedIds, triggerSaveStatus, DEFAULT_LIGHT, DEFAULT_DARK, startColorSchemeListener, subscribeColorScheme } from '../stores/canvas-store'
 import { useElements } from '../hooks/use-elements'
 import {
   useKeyboard,
@@ -123,6 +123,28 @@ export function CanvasView(): ReactNode {
         upsertElements(els)
       },
     })
+
+  // ── Color-scheme listener (adapts defaults + migrates elements) ─
+  const replaceElementsRef = useRef(replaceElements)
+  replaceElementsRef.current = replaceElements
+
+  useEffect(() => {
+    const unsub = subscribeColorScheme((isDark) => {
+      const from = isDark ? DEFAULT_LIGHT : DEFAULT_DARK
+      const to = isDark ? DEFAULT_DARK : DEFAULT_LIGHT
+      const updated = elementsRef.current.map((el) =>
+        el.strokeColor === from ? { ...el, strokeColor: to } : el,
+      )
+      if (updated.some((el, i) => el.strokeColor !== elementsRef.current[i].strokeColor)) {
+        replaceElementsRef.current(updated)
+      }
+    })
+    const cleanup = startColorSchemeListener()
+    return () => {
+      unsub()
+      cleanup()
+    }
+  }, [])
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {

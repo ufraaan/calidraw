@@ -36,6 +36,10 @@ export function updateDrawing(point: Point): Partial<Element> | null {
     drawState.points.push(point)
     return {
       type: 'pencil',
+      strokeColor: state.strokeColor,
+      strokeWidth: state.strokeWidth,
+      roughness: state.roughness,
+      opacity: state.opacity,
       x: 0,
       y: 0,
       width: 0,

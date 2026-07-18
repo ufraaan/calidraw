@@ -3,6 +3,9 @@ import type { Tool } from '../types'
 
 export type SaveStatus = 'idle' | 'saving' | 'saved'
 
+export const DEFAULT_LIGHT = '#1e1e1e'
+export const DEFAULT_DARK = '#e4e4e7'
+
 export interface CanvasState {
   tool: Tool
   zoom: number
@@ -45,7 +48,7 @@ const initialState: CanvasState = {
   zoom: saved?.zoom ?? 1,
   offsetX: saved?.offsetX ?? 0,
   offsetY: saved?.offsetY ?? 0,
-  strokeColor: detectDarkMode() ? '#e4e4e7' : '#1e1e1e',
+  strokeColor: detectDarkMode() ? DEFAULT_DARK : DEFAULT_LIGHT,
   backgroundColor: 'transparent',
   strokeWidth: 2,
   strokeStyle: 'solid',
@@ -107,6 +110,41 @@ export function setOpacity(opacity: number) {
 
 export function setSelectedIds(ids: string[]) {
   canvasStore.setState((s) => ({ ...s, selectedIds: ids }))
+}
+
+// ── Color scheme (dark/light) listener ────────────────────────
+type ColorSchemeCallback = (isDark: boolean) => void
+let colorSchemeSubscriber: ColorSchemeCallback | null = null
+let colorSchemeCleanup: (() => void) | null = null
+
+/**
+ * Subscribe to color-scheme changes. Returns unsubscribe.
+ * The callback fires on each change; the store's `strokeColor` is
+ * also updated automatically to the appropriate default.
+ */
+export function subscribeColorScheme(cb: ColorSchemeCallback): () => void {
+  colorSchemeSubscriber = cb
+  return () => {
+    colorSchemeSubscriber = null
+  }
+}
+
+/** Start listening for `prefers-color-scheme` changes. Call once on mount. */
+export function startColorSchemeListener(): () => void {
+  if (colorSchemeCleanup) return colorSchemeCleanup // already started
+
+  const mq = window.matchMedia('(prefers-color-scheme: dark)')
+  const handler = (e: MediaQueryListEvent) => {
+    const isDark = e.matches
+    canvasStore.setState((s) => ({
+      ...s,
+      strokeColor: isDark ? DEFAULT_DARK : DEFAULT_LIGHT,
+    }))
+    colorSchemeSubscriber?.(isDark)
+  }
+  mq.addEventListener('change', handler)
+  colorSchemeCleanup = () => mq.removeEventListener('change', handler)
+  return colorSchemeCleanup
 }
 
 // ── Smooth zoom animation ────────────────────────────────────
