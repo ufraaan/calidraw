@@ -1,47 +1,51 @@
-import { useSelector } from '@tanstack/react-store'
-import {
-  canvasStore,
-  setStrokeColor,
-  setBackgroundColor,
-  setStrokeWidth,
-  setOpacity,
-} from '../stores/canvas-store'
 import type { ReactNode } from 'react'
 
 const swatches = [
-  '#1e1e1e', '#e03131', '#e8590c', '#f08c00',
-  '#2f9e44', '#099268', '#1971c2', '#6741d9',
-  '#e64980', '#ffffff',
+  '#2d2d2d', '#e8847a', '#74aed8', '#81c4a1', '#cc99c8',
 ]
 
-export function ColorPicker({ label }: { label: string }): ReactNode {
-  const strokeColor = useSelector(canvasStore, (s) => s.strokeColor)
-  const bgColor = useSelector(canvasStore, (s) => s.backgroundColor)
-  const strokeWidth = useSelector(canvasStore, (s) => s.strokeWidth)
-  const opacity = useSelector(canvasStore, (s) => s.opacity)
+interface ColorPickerProps {
+  label: 'stroke' | 'fill'
+  color: string
+  strokeWidth: number
+  opacity: number
+  onColorChange: (color: string) => void
+  onStrokeWidthChange: (width: number) => void
+  onOpacityChange: (opacity: number) => void
+}
 
-  const currentColor = label === 'stroke' ? strokeColor : bgColor
-  const setColor = label === 'stroke' ? setStrokeColor : setBackgroundColor
+export function ColorPicker({
+  label,
+  color,
+  strokeWidth,
+  opacity,
+  onColorChange,
+  onStrokeWidthChange,
+  onOpacityChange,
+}: ColorPickerProps): ReactNode {
+  // For stroke, show the native picker + swatches + stroke width + opacity
+  // For fill, show the native picker + swatches (+ no-fill button)
+  const showDetails = label === 'stroke'
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <input
         type="color"
-        value={currentColor === 'transparent' ? '#ffffff' : currentColor}
-        onChange={(e) => setColor(e.target.value)}
-        className="size-5 cursor-pointer rounded border border-black/[0.06] bg-transparent p-0 dark:border-white/[0.06]"
+        value={color === 'transparent' ? '#ffffff' : color}
+        onChange={(e) => onColorChange(e.target.value)}
+        className="size-4 cursor-pointer rounded border border-black/[0.06] bg-transparent p-0 dark:border-white/[0.06]"
         title={label === 'stroke' ? 'Stroke color' : 'Fill color'}
       />
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-px">
         {swatches.map((c) => (
           <button
             key={c}
             type="button"
             aria-label={c}
-            onClick={() => setColor(c)}
-            className={`size-3.5 rounded-sm transition-transform hover:scale-110 ${
-              currentColor === c
-                ? 'ring-1 ring-black/20 dark:ring-white/30 ring-offset-1 ring-offset-transparent'
+            onClick={() => onColorChange(c)}
+            className={`size-3 rounded-sm transition-transform hover:scale-110 ${
+              color === c
+                ? 'ring-1 ring-black/30 dark:ring-white/40 ring-offset-[0.5px] ring-offset-transparent'
                 : ''
             }`}
             style={{ backgroundColor: c }}
@@ -51,51 +55,55 @@ export function ColorPicker({ label }: { label: string }): ReactNode {
           <button
             type="button"
             aria-label="No fill"
-            onClick={() => setBackgroundColor('transparent')}
-            className={`flex size-3.5 items-center justify-center rounded-sm border border-black/[0.08] text-[8px] font-bold leading-none text-zinc-300 dark:border-white/[0.12] dark:text-zinc-600 ${
-              bgColor === 'transparent' ? 'ring-1 ring-black/20 dark:ring-white/30 ring-offset-1' : ''
+            onClick={() => onColorChange('transparent')}
+            className={`flex size-3 items-center justify-center rounded-sm border border-black/[0.08] text-[6px] font-bold leading-none text-zinc-300 dark:border-white/[0.12] dark:text-zinc-600 ${
+              color === 'transparent' ? 'ring-1 ring-black/30 dark:ring-white/40 ring-offset-[0.5px]' : ''
             }`}
           >
             /
           </button>
         )}
       </div>
-      <div className="w-px h-4 bg-black/[0.06] dark:bg-white/[0.06]" />
-      <div className="flex items-center gap-0.5">
-        {[1, 2, 4].map((w) => (
-          <button
-            key={w}
-            type="button"
-            onClick={() => setStrokeWidth(w)}
-            className={`flex size-5 items-center justify-center rounded text-[10px] font-medium leading-none ${
-              strokeWidth === w
-                ? 'bg-black/[0.04] text-zinc-700 dark:bg-white/[0.06] dark:text-zinc-200'
-                : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
-            }`}
-            title={`${w}px`}
-          >
-            {w}
-          </button>
-        ))}
-      </div>
-      <div className="w-px h-4 bg-black/[0.06] dark:bg-white/[0.06]" />
-      <div className="flex items-center gap-0.5">
-        {[60, 80, 100].map((o) => (
-          <button
-            key={o}
-            type="button"
-            onClick={() => setOpacity(o)}
-            className={`flex size-5 items-center justify-center rounded text-[10px] font-medium leading-none ${
-              opacity === o
-                ? 'bg-black/[0.04] text-zinc-700 dark:bg-white/[0.06] dark:text-zinc-200'
-                : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
-            }`}
-            title={`${o}%`}
-          >
-            {o}
-          </button>
-        ))}
-      </div>
+      {showDetails && (
+        <>
+          <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
+          <div className="flex items-center gap-px">
+            {[1, 2, 4].map((w) => (
+              <button
+                key={w}
+                type="button"
+                onClick={() => onStrokeWidthChange(w)}
+                className={`flex size-4 items-center justify-center rounded-sm text-[9px] font-medium leading-none ${
+                  strokeWidth === w
+                    ? 'bg-black/[0.06] text-zinc-700 dark:bg-white/[0.08] dark:text-zinc-200'
+                    : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
+                }`}
+                title={`${w}px`}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
+          <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
+          <div className="flex items-center gap-px">
+            {[60, 80, 100].map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => onOpacityChange(o)}
+                className={`flex size-4 items-center justify-center rounded-sm text-[9px] font-medium leading-none ${
+                  opacity === o
+                    ? 'bg-black/[0.06] text-zinc-700 dark:bg-white/[0.08] dark:text-zinc-200'
+                    : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
+                }`}
+                title={`${o}%`}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

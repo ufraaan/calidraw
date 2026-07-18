@@ -42,7 +42,7 @@ export function CanvasView(): ReactNode {
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
-      <Toolbar />
+      <Toolbar elements={elements} onElementUpdate={upsertElement} />
       <ZoomControl />
     </div>
   )
