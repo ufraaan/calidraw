@@ -446,14 +446,6 @@ export function CanvasView(): ReactNode {
         </ContextMenu>
       )}
 
-      {/* Element count badge */}
-      {hasSelection && (
-        <div className="pointer-events-none absolute bottom-6 right-24">
-          <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
-            {selectedIds.length} selected
-          </span>
-        </div>
-      )}
     </div>
   )
 }

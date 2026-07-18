@@ -346,7 +346,12 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         const dx = point.x - startPoint.x
         const dy = point.y - startPoint.y
         dragIdsRef.current = new Set(els.map((el) => el.id))
-        transientRef.current = els.map((el) => ({ ...el, x: el.x + dx, y: el.y + dy }))
+        transientRef.current = els.map((el) => ({
+          ...el,
+          x: el.x + dx,
+          y: el.y + dy,
+          points: el.points ? el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) : undefined,
+        }))
         scheduleDraw()
         return
       }

@@ -265,5 +265,17 @@ export function getResizedElement(
     // br: position unchanged (anchor is top-left)
   }
 
+  // Offset points for pencil/line elements
+  if (element.points) {
+    const ob = getNormalizedBounds(element)
+    const sx = ob.w > 0 ? nw / ob.w : 1
+    const sy = ob.h > 0 ? nh / ob.h : 1
+    const newPoints = element.points.map((p) => ({
+      x: nx + (p.x - ob.x) * sx,
+      y: ny + (p.y - ob.y) * sy,
+    }))
+    return { ...element, x: nx, y: ny, width: nw, height: nh, points: newPoints }
+  }
+
   return { ...element, x: nx, y: ny, width: nw, height: nh }
 }
