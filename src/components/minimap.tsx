@@ -12,6 +12,11 @@ interface MinimapProps {
 const W = 172
 const H = 116
 
+/** Scale-aware stroke: thin at minimap scale, never thicker than 1px */
+function strokeWidth(minimapScale: number, elementStroke: number): number {
+  return Math.max(0.35, Math.min(1, elementStroke * minimapScale * 1.2))
+}
+
 export function Minimap({ elements }: MinimapProps): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const zoom = useSelector(canvasStore, (s) => s.zoom)
@@ -34,11 +39,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
     return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 }
   }, [elements])
 
-  // ── Layout (inner canvas area inside the glass panel) ────
-  // We reserve a 28px header for the label, then the preview fills the rest.
-  const HEADER_H = 28
-  const previewY = HEADER_H
-  const previewH = H - HEADER_H
+  // ── Layout ───────────────────────────────────────────────
   const pad = 6 // inner padding within the preview area
 
   // ── Draw ─────────────────────────────────────────────────
@@ -65,31 +66,16 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, W, H)
 
-    // ── Label ───────────────────────────────────────────────
-    ctx.fillStyle = '#a1a1aa'
-    ctx.font = '600 10px system-ui, -apple-system, sans-serif'
-    ctx.textBaseline = 'middle'
-    ctx.textAlign = 'center'
-    ctx.fillText('overview', W / 2, HEADER_H / 2)
-
-    // ── Separator line ──────────────────────────────────────
-    ctx.strokeStyle = 'rgba(0,0,0,0.04)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(10, HEADER_H)
-    ctx.lineTo(W - 10, HEADER_H)
-    ctx.stroke()
-
     // ── Preview background ──────────────────────────────────
     ctx.fillStyle = '#f5f5f4'
-    ctx.fillRect(0, previewY, W, previewH)
+    ctx.fillRect(0, 0, W, H)
 
     const { x: wx, y: wy, w: ww, h: wh } = world
     const avW = W - pad * 2
-    const avH = previewH - pad * 2
+    const avH = H - pad * 2
     const scale = Math.min(avW / Math.max(ww, 1), avH / Math.max(wh, 1))
     const ox = (W - ww * scale) / 2
-    const oy = previewY + (previewH - wh * scale) / 2
+    const oy = (H - wh * scale) / 2
 
     // ── Elements ────────────────────────────────────────────
     ctx.lineCap = 'round'
@@ -125,7 +111,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
             ctx.fillRect(sx, sy, sw, sh)
           }
           ctx.strokeStyle = stroke
-          ctx.lineWidth = Math.max(1, el.strokeWidth * 0.3)
+          ctx.lineWidth = strokeWidth(scale, el.strokeWidth)
           ctx.strokeRect(sx, sy, sw, sh)
           break
         }
@@ -139,7 +125,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
           ctx.closePath()
           if (fill) { ctx.fillStyle = fill; ctx.fill() }
           ctx.strokeStyle = stroke
-          ctx.lineWidth = Math.max(1, el.strokeWidth * 0.3)
+          ctx.lineWidth = strokeWidth(scale, el.strokeWidth)
           ctx.stroke()
           break
         }
@@ -149,7 +135,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
           ctx.ellipse(cx, cy, sw / 2, sh / 2, 0, 0, Math.PI * 2)
           if (fill) { ctx.fillStyle = fill; ctx.fill() }
           ctx.strokeStyle = stroke
-          ctx.lineWidth = Math.max(1, el.strokeWidth * 0.3)
+          ctx.lineWidth = strokeWidth(scale, el.strokeWidth)
           ctx.stroke()
           break
         }
@@ -157,7 +143,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
         case 'line': {
           if (!el.points || el.points.length < 2) break
           ctx.strokeStyle = stroke
-          ctx.lineWidth = Math.max(1, el.strokeWidth * 0.3)
+          ctx.lineWidth = strokeWidth(scale, el.strokeWidth)
           ctx.beginPath()
           const f = el.points[0]
           ctx.moveTo(ox + (f.x - wx) * scale, oy + (f.y - wy) * scale)
@@ -171,7 +157,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
         case 'pencil': {
           if (!el.points || el.points.length < 2) break
           ctx.strokeStyle = stroke
-          ctx.lineWidth = Math.max(1, el.strokeWidth * 0.25)
+          ctx.lineWidth = strokeWidth(scale, el.strokeWidth * 0.6)
           ctx.beginPath()
           const f2 = el.points[0]
           ctx.moveTo(ox + (f2.x - wx) * scale, oy + (f2.y - wy) * scale)
@@ -228,10 +214,10 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
     (mmX: number, mmY: number): Point => {
       const { x: wx, y: wy, w: ww, h: wh } = world
       const avW = W - pad * 2
-      const avH = previewH - pad * 2
+      const avH = H - pad * 2
       const s = Math.min(avW / Math.max(ww, 1), avH / Math.max(wh, 1))
       const ox = (W - ww * s) / 2
-      const oy = previewY + (previewH - wh * s) / 2
+      const oy = (H - wh * s) / 2
       return { x: wx + (mmX - ox) / s, y: wy + (mmY - oy) / s }
     },
     [world],
