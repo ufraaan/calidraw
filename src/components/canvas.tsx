@@ -144,14 +144,55 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [elements, selectedIds, closeCtxMenu])
 
+  // ── Select all, duplicate, nudge ─────────────────────────
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(elements.map((e) => e.id))
+  }, [elements])
+
+  const handleDuplicate = useCallback(() => {
+    if (selectedIds.length === 0) return
+    const dups = elements
+      .filter((e) => selectedIds.includes(e.id))
+      .map((e) => ({
+        ...e,
+        id: generateId(),
+        x: e.x + 20,
+        y: e.y + 20,
+      }))
+    upsertElements(dups)
+    setSelectedIds(dups.map((e) => e.id))
+  }, [elements, selectedIds, upsertElements])
+
+  const handleNudge = useCallback(
+    (dx: number, dy: number) => {
+      if (selectedIds.length === 0) return
+      const nudged = elements
+        .filter((e) => selectedIds.includes(e.id))
+        .map((e) => ({ ...e, x: e.x + dx, y: e.y + dy }))
+      upsertElements(nudged)
+    },
+    [elements, selectedIds, upsertElements],
+  )
+
   useEffect(() => {
     setClipboardActions({
       copy: handleCopy,
       cut: handleCut,
       paste: handlePaste,
       deleteSelected: handleDeleteSelected,
+      selectAll: handleSelectAll,
+      duplicate: handleDuplicate,
+      nudge: handleNudge,
     })
-  }, [handleCopy, handleCut, handlePaste, handleDeleteSelected])
+  }, [
+    handleCopy,
+    handleCut,
+    handlePaste,
+    handleDeleteSelected,
+    handleSelectAll,
+    handleDuplicate,
+    handleNudge,
+  ])
 
   // ── Clipboard paste (images from system) ──────────────────
   useEffect(() => {

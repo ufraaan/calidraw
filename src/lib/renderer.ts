@@ -26,7 +26,7 @@ function seedFromId(id: string): number {
 }
 
 // ── Draw options ─────────────────────────────────────────────
-function getDrawOptions(element: Element) {
+export function getDrawOptions(element: Element) {
   return {
     stroke: element.strokeColor,
     strokeWidth: element.strokeWidth,
@@ -46,7 +46,7 @@ function getDrawOptions(element: Element) {
   }
 }
 
-// ── Shape renderers ──────────────────────────────────────────
+// ── Shape renderers (canvas) ─────────────────────────────────
 function renderRectangle(rc: RoughCanvas, el: Element) {
   const options = getDrawOptions(el)
   const x = el.width >= 0 ? el.x : el.x + el.width
@@ -141,7 +141,7 @@ function renderImage(ctx: CanvasRenderingContext2D, el: Element) {
   ctx.restore()
 }
 
-// ── Scene ────────────────────────────────────────────────────
+// ── Scene (canvas) ───────────────────────────────────────────
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   elements: Element[],
@@ -191,7 +191,7 @@ export function renderScene(
   }
 }
 
-// ── Selection indicator (dashed border + tiny resize handles) ─
+// ── Selection indicator ──────────────────────────────────────
 function renderSelectionIndicator(
   ctx: CanvasRenderingContext2D,
   el: Element,
@@ -201,7 +201,6 @@ function renderSelectionIndicator(
   const w = Math.abs(el.width)
   const h = Math.abs(el.height)
 
-  // Thin dashed border
   ctx.save()
   ctx.strokeStyle = '#3b82f6'
   ctx.lineWidth = 1
@@ -210,7 +209,6 @@ function renderSelectionIndicator(
   ctx.setLineDash([])
   ctx.restore()
 
-  // Tiny resize handles (3px filled circles)
   const r = 3
   const pts: Point[] = [
     { x, y },
@@ -236,7 +234,7 @@ function renderSelectionIndicator(
   ctx.restore()
 }
 
-// ── Offscreen render - NO selection indicators ────────────────
+// ── Offscreen canvas render (PNG export) ─────────────────────
 export function renderElementsToCanvas(
   elements: Element[],
   scale = 2,
@@ -304,4 +302,177 @@ export function downloadAsPNG(
     a.click()
     URL.revokeObjectURL(url)
   }, 'image/png')
+}
+
+// ── SVG export ───────────────────────────────────────────────
+function renderSVGElement(
+  rc: ReturnType<typeof rough.svg>,
+  el: Element,
+  container: Node,
+) {
+  const options = getDrawOptions(el)
+
+  switch (el.type) {
+    case 'rectangle': {
+      const x = el.width >= 0 ? el.x : el.x + el.width
+      const y = el.height >= 0 ? el.y : el.y + el.height
+      const w = Math.abs(el.width)
+      const h = Math.abs(el.height)
+      const node = rc.rectangle(x, y, w, h, options)
+      container.appendChild(node)
+      break
+    }
+    case 'diamond': {
+      const cx = el.x + el.width / 2
+      const cy = el.y + el.height / 2
+      const hw = Math.abs(el.width) / 2
+      const hh = Math.abs(el.height) / 2
+      const pts: [number, number][] = [
+        [cx, cy - hh],
+        [cx + hw, cy],
+        [cx, cy + hh],
+        [cx - hw, cy],
+      ]
+      const node = rc.polygon(pts, options)
+      container.appendChild(node)
+      break
+    }
+    case 'ellipse': {
+      const cx = el.x + el.width / 2
+      const cy = el.y + el.height / 2
+      const hw = Math.abs(el.width) / 2
+      const hh = Math.abs(el.height) / 2
+      const node = rc.ellipse(cx, cy, hw * 2, hh * 2, options)
+      container.appendChild(node)
+      break
+    }
+    case 'arrow': {
+      const fromX = el.x
+      const fromY = el.y
+      const toX = el.x + el.width
+      const toY = el.y + el.height
+      let node = rc.line(fromX, fromY, toX, toY, options)
+      container.appendChild(node)
+
+      const angle = Math.atan2(toY - fromY, toX - fromX)
+      const headLen = 10 + el.strokeWidth * 2
+      const headAngle = Math.PI / 6
+      const hx1 = toX - headLen * Math.cos(angle - headAngle)
+      const hy1 = toY - headLen * Math.sin(angle - headAngle)
+      const hx2 = toX - headLen * Math.cos(angle + headAngle)
+      const hy2 = toY - headLen * Math.sin(angle + headAngle)
+      node = rc.line(toX, toY, hx1, hy1, options)
+      container.appendChild(node)
+      node = rc.line(toX, toY, hx2, hy2, options)
+      container.appendChild(node)
+      break
+    }
+    case 'line': {
+      if (!el.points || el.points.length < 2) break
+      const pts = el.points.map((p) => [p.x, p.y] as [number, number])
+      const node = rc.linearPath(pts, options)
+      container.appendChild(node)
+      break
+    }
+    case 'pencil': {
+      if (!el.points || el.points.length < 2) break
+      const pts = el.points.map((p) => [p.x, p.y] as [number, number])
+      const node = rc.linearPath(pts, {
+        ...options,
+        roughness: 0.5,
+        strokeWidth: el.strokeWidth * 0.5,
+      })
+      container.appendChild(node)
+      break
+    }
+    case 'text': {
+      if (!el.text) break
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+      text.setAttribute('x', String(el.x))
+      text.setAttribute('y', String(el.y))
+      text.setAttribute('fill', el.strokeColor)
+      text.setAttribute('font-size', String(el.fontSize ?? 20))
+      text.setAttribute('font-family', el.fontFamily ?? 'sans-serif')
+      text.setAttribute('opacity', String(el.opacity / 100))
+      text.textContent = el.text
+      container.appendChild(text)
+      break
+    }
+    case 'image': {
+      if (!el.imageData) break
+      const x = el.width >= 0 ? el.x : el.x + el.width
+      const y = el.height >= 0 ? el.y : el.y + el.height
+      const w = Math.abs(el.width)
+      const h = Math.abs(el.height)
+      const img = document.createElementNS('http://www.w3.org/2000/svg', 'image')
+      img.setAttribute('x', String(x))
+      img.setAttribute('y', String(y))
+      img.setAttribute('width', String(w))
+      img.setAttribute('height', String(h))
+      img.setAttribute('href', el.imageData)
+      img.setAttribute('opacity', String(el.opacity / 100))
+      container.appendChild(img)
+      break
+    }
+  }
+}
+
+export function renderToSVGString(elements: Element[], ids: string[]): string {
+  const toRender =
+    ids.length > 0 ? elements.filter((e) => ids.includes(e.id)) : elements
+
+  if (toRender.length === 0) return ''
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const el of toRender) {
+    const ex = el.width >= 0 ? el.x : el.x + el.width
+    const ey = el.height >= 0 ? el.y : el.y + el.height
+    const ew = Math.abs(el.width)
+    const eh = Math.abs(el.height)
+    if (ex < minX) minX = ex
+    if (ey < minY) minY = ey
+    if (ex + ew > maxX) maxX = ex + ew
+    if (ey + eh > maxY) maxY = ey + eh
+  }
+
+  const pad = 20
+  const svgW = Math.ceil(maxX - minX + pad * 2)
+  const svgH = Math.ceil(maxY - minY + pad * 2)
+
+  const xmlns = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(xmlns, 'svg')
+  svg.setAttribute('width', String(svgW))
+  svg.setAttribute('height', String(svgH))
+  svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`)
+  svg.setAttribute('xmlns', xmlns)
+
+  const rc = rough.svg(svg)
+
+  // Wrapping group for coordinate transform
+  const g = document.createElementNS(xmlns, 'g')
+  g.setAttribute('transform', `translate(${-minX + pad}, ${-minY + pad})`)
+  svg.appendChild(g)
+
+  for (const el of toRender) {
+    renderSVGElement(rc, el, g)
+  }
+
+  // Remove any children rough.js added directly to <svg>
+  while (svg.firstChild && svg.firstChild !== g) {
+    svg.removeChild(svg.firstChild)
+  }
+
+  return new XMLSerializer().serializeToString(svg)
+}
+
+export function downloadAsSVG(elements: Element[], ids: string[], filename: string) {
+  const svgStr = renderToSVGString(elements, ids)
+  if (!svgStr) return
+  const blob = new Blob([svgStr], { type: 'image/svg+xml' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }

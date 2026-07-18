@@ -19,6 +19,9 @@ export interface ClipboardActions {
   cut: () => void
   paste: () => void
   deleteSelected: () => void
+  selectAll: () => void
+  duplicate: () => void
+  nudge: (dx: number, dy: number) => void
 }
 
 let clipboardActions: ClipboardActions = {
@@ -26,6 +29,9 @@ let clipboardActions: ClipboardActions = {
   cut: () => {},
   paste: () => {},
   deleteSelected: () => {},
+  selectAll: () => {},
+  duplicate: () => {},
+  nudge: () => {},
 }
 
 export function setClipboardActions(actions: Partial<ClipboardActions>) {
@@ -44,51 +50,85 @@ export function useKeyboard() {
     function handleKeyDown(e: KeyboardEvent) {
       const key = e.key.toLowerCase()
       const mod = e.ctrlKey || e.metaKey
+      const shift = e.shiftKey
 
+      // Escape → select
       if (key === 'escape') {
         setTool('select')
         return
       }
 
-      if (!mod && key in toolKeyMap) {
+      // Tool shortcuts (only when no modifier is held)
+      if (!mod && !shift && key in toolKeyMap) {
         setTool(toolKeyMap[key])
         return
       }
 
+      // Delete / Backspace
       if (key === 'delete' || key === 'backspace') {
         e.preventDefault()
         clipboardActions.deleteSelected()
         return
       }
 
+      // ── Modifier-based shortcuts ──────────────────────────
       if (mod) {
         switch (key) {
+          case 'a':
+            e.preventDefault()
+            clipboardActions.selectAll()
+            return
           case 'c':
             e.preventDefault()
             clipboardActions.copy()
-            break
+            return
           case 'x':
             e.preventDefault()
             clipboardActions.cut()
-            break
+            return
           case 'v':
             e.preventDefault()
             clipboardActions.paste()
-            break
+            return
+          case 'd':
+            e.preventDefault()
+            clipboardActions.duplicate()
+            return
           case '=':
           case '+':
             e.preventDefault()
             zoomAtPoint(Math.min(5, getCurrentZoom() + 0.1))
-            break
+            return
           case '-':
             e.preventDefault()
             zoomAtPoint(Math.max(0.1, getCurrentZoom() - 0.1))
-            break
+            return
           case '0':
             e.preventDefault()
             zoomAtPoint(1)
-            break
+            return
         }
+      }
+
+      // ── Arrow keys (nudge) ────────────────────────────────
+      const nudgeStep = shift ? 10 : 1
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault()
+          clipboardActions.nudge(0, -nudgeStep)
+          return
+        case 'ArrowDown':
+          e.preventDefault()
+          clipboardActions.nudge(0, nudgeStep)
+          return
+        case 'ArrowLeft':
+          e.preventDefault()
+          clipboardActions.nudge(-nudgeStep, 0)
+          return
+        case 'ArrowRight':
+          e.preventDefault()
+          clipboardActions.nudge(nudgeStep, 0)
+          return
       }
     }
 

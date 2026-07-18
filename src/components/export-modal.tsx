@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { downloadAsPNG } from '../lib/renderer'
+import { downloadAsPNG, downloadAsSVG } from '../lib/renderer'
 import type { Element } from '../types'
 
 interface ExportModalProps {
@@ -11,80 +11,111 @@ interface ExportModalProps {
 export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps) {
   const [mode, setMode] = useState<'all' | 'selection'>('all')
   const [scale, setScale] = useState(2)
+  const [format, setFormat] = useState<'png' | 'svg'>('png')
 
   const canSelectSelection = selectedIds.length > 0
 
   const handleExport = () => {
     const ids = mode === 'selection' ? selectedIds : []
     const label = mode === 'selection' ? 'selection' : 'canvas'
-    downloadAsPNG(elements, ids, `calidraw-${label}-${Date.now()}.png`, scale)
+
+    if (format === 'svg') {
+      downloadAsSVG(elements, ids, `calidraw-${label}.svg`)
+    } else {
+      downloadAsPNG(elements, ids, `calidraw-${label}.png`, scale)
+    }
     onClose()
   }
 
+  const btnClass = (active: boolean, disabled = false) =>
+    `flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-100 ${
+      disabled
+        ? 'cursor-default text-zinc-300 dark:text-zinc-600'
+        : active
+          ? 'bg-zinc-900 text-white shadow-sm dark:bg-white dark:text-zinc-900'
+          : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800'
+    }`
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center"
       onClick={onClose}
     >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/[0.04] dark:bg-black/40" />
+
+      {/* Panel */}
       <div
-        className="w-[300px] rounded-xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.2)] dark:border-zinc-700 dark:bg-zinc-900"
+        className="relative w-[280px] rounded-xl border border-zinc-200/80 bg-white p-5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+        {/* Title */}
+        <div className="mb-5 text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">
           Export
-        </h2>
+        </div>
 
         {/* Mode */}
-        <label className="mb-3 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+        <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
           Export
-        </label>
-        <div className="mb-4 flex gap-2">
+        </div>
+        <div className="mb-4 flex gap-1.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
           <button
             type="button"
-            className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-              mode === 'all'
-                ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-            }`}
+            className={btnClass(mode === 'all')}
             onClick={() => setMode('all')}
           >
-            Entire Canvas
+            Entire canvas
           </button>
           <button
             type="button"
+            className={btnClass(mode === 'selection', !canSelectSelection)}
             disabled={!canSelectSelection}
-            className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-              mode === 'selection'
-                ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                : canSelectSelection
-                  ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-                  : 'cursor-default bg-zinc-50 text-zinc-300 dark:bg-zinc-800/50 dark:text-zinc-600'
-            }`}
             onClick={() => canSelectSelection && setMode('selection')}
           >
             Selection
           </button>
         </div>
 
-        {/* Scale */}
-        <label className="mb-3 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Scale
-        </label>
-        <div className="mb-5 flex gap-2">
-          {[1, 2, 3].map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                scale === s
-                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-              }`}
-              onClick={() => setScale(s)}
-            >
-              {s}×
-            </button>
-          ))}
+        {/* Scale (PNG only) */}
+        {format === 'png' && (
+          <>
+            <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              Scale
+            </div>
+            <div className="mb-4 flex gap-1.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+              {[1, 2, 3].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={btnClass(scale === s)}
+                  onClick={() => setScale(s)}
+                >
+                  {s}×
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Format */}
+        <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          Format
+        </div>
+        <div className="mb-5 flex gap-1.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+          <button
+            type="button"
+            className={btnClass(format === 'png')}
+            onClick={() => setFormat('png')}
+          >
+            PNG
+          </button>
+          <button
+            type="button"
+            className={btnClass(format === 'svg')}
+            onClick={() => setFormat('svg')}
+          >
+            SVG
+          </button>
         </div>
 
         {/* Actions */}
@@ -92,16 +123,16 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            className="flex-1 rounded-lg px-3 py-2 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleExport}
-            className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-800 active:scale-[0.98] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+            className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-all duration-100 hover:bg-zinc-800 active:scale-[0.97] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
           >
-            Export PNG
+            Export
           </button>
         </div>
       </div>

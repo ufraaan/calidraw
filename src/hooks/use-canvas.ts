@@ -282,7 +282,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Resize cursor when hovering a handle (select tool, not dragging)
+      // Resize cursor when hovering near edges/handles (select tool, not dragging)
       if (tool === 'select' && !resizeHandleRef.current) {
         const firstSelected =
           selectedRef.current.length > 0

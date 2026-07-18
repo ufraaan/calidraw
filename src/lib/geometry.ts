@@ -65,21 +65,87 @@ export function getResizeHandles(element: Element): Point[] {
   ]
 }
 
-/** Hit-test the mouse against all resize handles of an element. */
+/**
+ * Hit-test the mouse against resize handles of an element.
+ *
+ * Corners are point-checked (must be near the exact corner).
+ * Edges are line-checked — anywhere along the edge triggers resize,
+ * making it much easier to grab.
+ */
 export function hitTestResizeHandle(
   point: Point,
   element: Element,
 ): ResizeHandle | null {
-  const handles = getResizeHandles(element)
-  const threshold = 8
-  for (let i = 0; i < handles.length; i++) {
+  const b = getNormalizedBounds(element)
+
+  // For very small elements, fall back to the bounding box
+  if (b.w < 8 || b.h < 8) {
+    const handles = getResizeHandles(element)
+    const threshold = 8
+    for (let i = 0; i < handles.length; i++) {
+      if (
+        Math.abs(point.x - handles[i].x) <= threshold &&
+        Math.abs(point.y - handles[i].y) <= threshold
+      ) {
+        return HANDLE_NAMES[i]
+      }
+    }
+    return null
+  }
+
+  const threshold = 7
+
+  // 1) Corners — point hit (takes priority)
+  const corners: { handle: ResizeHandle; x: number; y: number }[] = [
+    { handle: 'tl', x: b.x, y: b.y },
+    { handle: 'tr', x: b.x + b.w, y: b.y },
+    { handle: 'br', x: b.x + b.w, y: b.y + b.h },
+    { handle: 'bl', x: b.x, y: b.y + b.h },
+  ]
+  for (const c of corners) {
     if (
-      Math.abs(point.x - handles[i].x) <= threshold &&
-      Math.abs(point.y - handles[i].y) <= threshold
+      Math.abs(point.x - c.x) <= threshold &&
+      Math.abs(point.y - c.y) <= threshold
     ) {
-      return HANDLE_NAMES[i]
+      return c.handle
     }
   }
+
+  // 2) Edges — line hit (anywhere along the edge)
+  const edgeThreshold = 8
+  // Top edge
+  if (
+    Math.abs(point.y - b.y) <= edgeThreshold &&
+    point.x >= b.x &&
+    point.x <= b.x + b.w
+  ) {
+    return 'tm'
+  }
+  // Bottom edge
+  if (
+    Math.abs(point.y - (b.y + b.h)) <= edgeThreshold &&
+    point.x >= b.x &&
+    point.x <= b.x + b.w
+  ) {
+    return 'bm'
+  }
+  // Left edge
+  if (
+    Math.abs(point.x - b.x) <= edgeThreshold &&
+    point.y >= b.y &&
+    point.y <= b.y + b.h
+  ) {
+    return 'lm'
+  }
+  // Right edge
+  if (
+    Math.abs(point.x - (b.x + b.w)) <= edgeThreshold &&
+    point.y >= b.y &&
+    point.y <= b.y + b.h
+  ) {
+    return 'rm'
+  }
+
   return null
 }
 
