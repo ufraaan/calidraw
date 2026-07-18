@@ -363,6 +363,31 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
+      if (tool === 'text') {
+        const state = canvasStore.state
+        const el: Element = {
+          id: generateId(),
+          type: 'text',
+          x: point.x,
+          y: point.y,
+          width: 100,
+          height: 24,
+          angle: 0,
+          strokeColor: state.strokeColor,
+          backgroundColor: 'transparent',
+          strokeWidth: 0,
+          strokeStyle: 'solid',
+          roughness: 0,
+          opacity: state.opacity,
+          text: '',
+          fontFamily: 'sans-serif',
+          fontSize: 20,
+        }
+        onElementCreate(el)
+        setTool('select')
+        return
+      }
+
       if (isShapeTool(tool as Tool)) {
         startDrawing(point)
       }

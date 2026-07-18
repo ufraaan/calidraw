@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { setTool, zoomAtPoint } from '../stores/canvas-store'
+import { canvasStore, setTool, zoomAtPoint } from '../stores/canvas-store'
 import type { Tool, Element } from '../types'
 
 const toolKeyMap: Record<string, Tool> = {
@@ -49,12 +49,26 @@ export function copyToClipboard(elements: Element[]) {
   clipboardElements = elements.map((e) => ({ ...e, id: crypto.randomUUID() }))
 }
 
+let spacePanPrevTool: Tool | null = null
+
 export function useKeyboard() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const key = e.key.toLowerCase()
       const mod = e.ctrlKey || e.metaKey
       const shift = e.shiftKey
+
+      // Space → temporary pan (skip if typing in an input)
+      if (e.key === ' ' && !mod) {
+        const tag = (e.target as HTMLElement)?.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return
+        e.preventDefault()
+        if (spacePanPrevTool === null) {
+          spacePanPrevTool = canvasStore.state.tool as Tool
+          setTool('pan')
+        }
+        return
+      }
 
       // Escape → select
       if (key === 'escape') {
@@ -144,8 +158,20 @@ export function useKeyboard() {
       }
     }
 
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.key === ' ' && spacePanPrevTool !== null) {
+        e.preventDefault()
+        setTool(spacePanPrevTool)
+        spacePanPrevTool = null
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
   }, [])
 }
 

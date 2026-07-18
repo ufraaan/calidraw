@@ -112,6 +112,10 @@ export function CanvasView(): ReactNode {
       onElementCreate: (el) => {
         pushUndo()
         upsertElement(el)
+        // Auto-enter text editing when a text element is created
+        if (el.type === 'text') {
+          setEditingTextId(el.id)
+        }
       },
       onElementsUpdate: (els) => {
         pushUndo()
