@@ -42,19 +42,17 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   const zoom = useSelector(canvasStore, (s) => s.zoom)
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
 
-  // offsetX/offsetY intentionally NOT selected via useSelector —
-  // they change at high frequency during pan and would thrash React.
-  // Read them from canvasStore.state directly where needed.
-
-  // ── Refs (transient render state — avoids React re-renders) ──
+  // ── Refs ───────────────────────────────────────────────────
   const elementsRef = useRef(elements)
   const selectedRef = useRef(selectedIds)
   const transientRef = useRef<Element[]>([])
   const dragIdsRef = useRef<Set<string>>(new Set())
   const panStartRef = useRef<Point | null>(null)
-  const dragOriginRef = useRef<{ point: Point; el: Element } | null>(null)
+  const dragOriginRef = useRef<{ point: Point; elements: Element[] } | null>(null)
   const resizeHandleRef = useRef<ResizeHandle | null>(null)
   const marqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
+  const hoveredElRef = useRef<string | null>(null)
+  const cursorPosRef = useRef<Point | null>(null)
   const rafRef = useRef(0)
 
   useEffect(() => {
@@ -62,7 +60,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     selectedRef.current = selectedIds
   })
 
-  // ── Direct canvas render (avoids React re-render latency) ─────
+  // ── Direct canvas render ───────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -77,10 +75,31 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
 
     const hidden = dragIdsRef.current
     const visible = elementsRef.current.filter((e) => !hidden.has(e.id))
-    const all = visible.concat(transientRef.current)
-    renderScene(ctx, all, new Set(selectedRef.current))
+    // Build set of selected IDs for rendering
+    const sel = new Set(selectedRef.current)
 
-    // Draw selection marquee
+    // Hover highlight
+    if (tool === 'select' && !dragOriginRef.current && !resizeHandleRef.current && hoveredElRef.current) {
+      const hov = elementsRef.current.find((e) => e.id === hoveredElRef.current)
+      if (hov && !sel.has(hov.id)) {
+        const bx = hov.width >= 0 ? hov.x : hov.x + hov.width
+        const by = hov.height >= 0 ? hov.y : hov.y + hov.height
+        const bw = Math.abs(hov.width)
+        const bh = Math.abs(hov.height)
+        ctx.save()
+        ctx.strokeStyle = 'rgba(59,130,246,0.35)'
+        ctx.lineWidth = 1.5 / s.zoom
+        ctx.setLineDash([3 / s.zoom, 4 / s.zoom])
+        ctx.strokeRect(bx - 3, by - 3, bw + 6, bh + 6)
+        ctx.setLineDash([])
+        ctx.restore()
+      }
+    }
+
+    const all = visible.concat(transientRef.current)
+    renderScene(ctx, all, sel)
+
+    // Marquee
     const m = marqueeRef.current
     if (m) {
       const rx = Math.min(m.x1, m.x2)
@@ -88,9 +107,9 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       const rw = Math.abs(m.x2 - m.x1)
       const rh = Math.abs(m.y2 - m.y1)
       ctx.save()
-      ctx.fillStyle = 'rgba(59,130,246,0.06)'
+      ctx.fillStyle = 'rgba(59,130,246,0.08)'
       ctx.strokeStyle = '#3b82f6'
-      ctx.lineWidth = 1 / s.zoom
+      ctx.lineWidth = 1.5 / s.zoom
       ctx.setLineDash([4 / s.zoom, 4 / s.zoom])
       ctx.fillRect(rx, ry, rw, rh)
       ctx.strokeRect(rx, ry, rw, rh)
@@ -98,15 +117,41 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       ctx.restore()
     }
 
+    // Dimension label during resize
+    if (resizeHandleRef.current && transientRef.current.length === 1 && cursorPosRef.current) {
+      const el = transientRef.current[0]
+      const w = Math.abs(el.width)
+      const h = Math.abs(el.height)
+      const label = `${Math.round(w)} × ${Math.round(h)}`
+      const cx = cursorPosRef.current.x
+      const cy = cursorPosRef.current.y
+      ctx.save()
+      ctx.font = `11px system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'bottom'
+      const metrics = ctx.measureText(label)
+      const lw = metrics.width + 12
+      const lh = 22
+      const lx = cx - lw / 2
+      const ly = cy - 14
+      ctx.fillStyle = 'rgba(0,0,0,0.75)'
+      ctx.beginPath()
+      ctx.roundRect(lx, ly, lw, lh, 4)
+      ctx.fill()
+      ctx.fillStyle = '#fff'
+      ctx.fillText(label, cx, ly + lh - 5)
+      ctx.restore()
+    }
+
     ctx.restore()
-  }, [])
+  }, [tool])
 
   const scheduleDraw = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
     rafRef.current = requestAnimationFrame(draw)
   }, [draw])
 
-  // ── Canvas setup ──────────────────────────────────────────────
+  // ── Canvas setup ──────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -122,19 +167,17 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     return () => window.removeEventListener('resize', resize)
   }, [])
 
-  // ── Re-render when committed state changes ────────────────────
   useEffect(() => {
     draw()
   }, [draw, elements, zoom, selectedIds, tool])
 
-  // ── Wheel: trackpad pan / ctrl+zoom ───────────────────────────
+  // ── Wheel ─────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     function onWheel(e: WheelEvent) {
       e.preventDefault()
-
       if (e.ctrlKey || e.metaKey) {
         const delta = -e.deltaY * 0.01
         const cur = canvasStore.state.zoom
@@ -151,7 +194,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [scheduleDraw])
 
-  // ── Cursor ────────────────────────────────────────────────────
+  // ── Cursor ─────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -170,10 +213,27 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     [],
   )
 
-  // ── Pointer down ──────────────────────────────────────────────
+  // ── Helper: snapshot selected elements ─────────────────────
+  const snapshotSelection = useCallback(
+    (ids: string[]) =>
+      ids
+        .map((id) => elementsRef.current.find((e) => e.id === id))
+        .filter((e): e is Element => !!e)
+        .map((e) => ({ ...e })),
+    [],
+  )
+
+  // ── Pointer down ──────────────────────────────────────────
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const point = screenToCanvas(e.clientX, e.clientY)
+
+      // Middle-click pan
+      if (e.button === 1) {
+        panStartRef.current = { x: e.clientX, y: e.clientY }
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing'
+        return
+      }
 
       if (tool === 'pan') {
         panStartRef.current = { x: e.clientX, y: e.clientY }
@@ -187,41 +247,49 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
             ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
             : undefined
 
-        // 1) Check resize handles on the first selected element
+        // 1) Resize handles on first selected element
         if (firstSelected) {
           const handle = hitTestResizeHandle(point, firstSelected)
           if (handle) {
             resizeHandleRef.current = handle
-            dragOriginRef.current = { point, el: { ...firstSelected } }
+            dragOriginRef.current = { point, elements: [{ ...firstSelected }] }
             return
           }
         }
 
-        // 2) Check for element hit
+        // 2) Element hit
         const hit = [...elementsRef.current].reverse().find((el) => hitTest(point, el))
         if (hit) {
+          const alreadyInSel = selectedRef.current.includes(hit.id)
+          const isMultiSel = selectedRef.current.length > 1
+
           if (e.altKey) {
             // Alt + drag = duplicate
             const clone: Element = { ...hit, id: generateId() }
             onElementCreate(clone)
             setSelectedIds([clone.id])
-            dragOriginRef.current = { point, el: clone }
+            dragOriginRef.current = { point, elements: [{ ...clone }] }
           } else if (e.ctrlKey || e.metaKey) {
             // Ctrl/Cmd + click = toggle selection
-            const alreadySelected = selectedRef.current.includes(hit.id)
-            const next = alreadySelected
+            const next = alreadyInSel
               ? selectedRef.current.filter((id) => id !== hit.id)
               : [...selectedRef.current, hit.id]
             setSelectedIds(next)
-            if (next.length > 0) {
-              dragOriginRef.current = { point, el: { ...hit } }
+            const snaps = snapshotSelection(next)
+            if (snaps.length > 0) {
+              dragOriginRef.current = { point, elements: snaps }
             }
+          } else if (alreadyInSel && isMultiSel) {
+            // Click on element already in multi-selection → drag ALL selected
+            const snaps = snapshotSelection(selectedRef.current)
+            dragOriginRef.current = { point, elements: snaps }
           } else {
+            // Single select + drag
             setSelectedIds([hit.id])
-            dragOriginRef.current = { point, el: { ...hit } }
+            dragOriginRef.current = { point, elements: [{ ...hit }] }
           }
         } else {
-          // 3) Empty space — start marquee selection
+          // 3) Empty space → marquee
           marqueeRef.current = { x1: point.x, y1: point.y, x2: point.x, y2: point.y }
           setSelectedIds([])
         }
@@ -233,13 +301,14 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         startDrawing(point)
       }
     },
-    [tool, screenToCanvas, scheduleDraw, onElementCreate],
+    [tool, screenToCanvas, scheduleDraw, onElementCreate, snapshotSelection],
   )
 
-  // ── Pointer move ──────────────────────────────────────────────
+  // ── Pointer move ──────────────────────────────────────────
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const point = screenToCanvas(e.clientX, e.clientY)
+      cursorPosRef.current = point
 
       // Pan
       if (panStartRef.current) {
@@ -252,7 +321,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Marquee selection
+      // Marquee
       if (marqueeRef.current) {
         marqueeRef.current.x2 = point.x
         marqueeRef.current.y2 = point.y
@@ -262,39 +331,57 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
 
       // Resize
       if (resizeHandleRef.current && dragOriginRef.current) {
-        const { el } = dragOriginRef.current
+        const { elements: els } = dragOriginRef.current
         const aspectLock = e.shiftKey
-        const resized = getResizedElement(el, resizeHandleRef.current, point, aspectLock)
-        dragIdsRef.current = new Set([el.id])
+        const resized = getResizedElement(els[0], resizeHandleRef.current, point, aspectLock)
+        dragIdsRef.current = new Set([els[0].id])
         transientRef.current = [resized]
         scheduleDraw()
         return
       }
 
-      // Drag shape
+      // Drag
       if (dragOriginRef.current) {
-        const { point: startPoint, el } = dragOriginRef.current
+        const { point: startPoint, elements: els } = dragOriginRef.current
         const dx = point.x - startPoint.x
         const dy = point.y - startPoint.y
-        dragIdsRef.current = new Set([el.id])
-        transientRef.current = [{ ...el, x: el.x + dx, y: el.y + dy }]
+        dragIdsRef.current = new Set(els.map((el) => el.id))
+        transientRef.current = els.map((el) => ({ ...el, x: el.x + dx, y: el.y + dy }))
         scheduleDraw()
         return
       }
 
-      // Resize cursor when hovering near edges/handles (select tool, not dragging)
-      if (tool === 'select' && !resizeHandleRef.current) {
+      // Hover detection + cursor (select tool only)
+      if (tool === 'select') {
+        // Resize cursor on handles/edges of selected element
         const firstSelected =
           selectedRef.current.length > 0
             ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
             : undefined
+        let cursorSet = false
         if (firstSelected && selectedRef.current.length === 1) {
           const handle = hitTestResizeHandle(point, firstSelected)
-          if (canvasRef.current) {
-            canvasRef.current.style.cursor = handle ? RESIZE_CURSOR[handle] : 'default'
+          if (handle) {
+            if (canvasRef.current) canvasRef.current.style.cursor = RESIZE_CURSOR[handle]
+            cursorSet = true
           }
-        } else if (canvasRef.current) {
-          canvasRef.current.style.cursor = 'default'
+        }
+
+        if (!cursorSet) {
+          // Hover highlight
+          const hit = [...elementsRef.current].reverse().find((el) => hitTest(point, el))
+          if (hit) {
+            hoveredElRef.current = hit.id
+            // Show move cursor when hovering an element
+            if (canvasRef.current) canvasRef.current.style.cursor = 'move'
+            scheduleDraw()
+          } else {
+            if (hoveredElRef.current) {
+              hoveredElRef.current = null
+              scheduleDraw()
+            }
+            if (canvasRef.current) canvasRef.current.style.cursor = 'default'
+          }
         }
       }
 
@@ -314,7 +401,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     [tool, screenToCanvas, scheduleDraw],
   )
 
-  // ── Pointer up ────────────────────────────────────────────────
+  // ── Pointer up ────────────────────────────────────────────
   const handlePointerUp = useCallback(
     (_e: React.PointerEvent<HTMLCanvasElement>) => {
       panStartRef.current = null
@@ -322,17 +409,14 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         canvasRef.current.style.cursor = TOOL_CURSOR[tool] ?? 'default'
       }
 
-      // Commit marquee selection
+      // Marquee
       if (marqueeRef.current) {
         const { x1, y1, x2, y2 } = marqueeRef.current
         marqueeRef.current = null
-
         const mx = Math.min(x1, x2)
         const my = Math.min(y1, y2)
         const mw = Math.abs(x2 - x1)
         const mh = Math.abs(y2 - y1)
-
-        // Only select if marquee is bigger than a click (>= 5px)
         if (mw >= 5 || mh >= 5) {
           const inside = elementsRef.current.filter((el) => {
             const bx = el.width >= 0 ? el.x : el.x + el.width
@@ -347,7 +431,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Commit resize
+      // Resize
       if (resizeHandleRef.current) {
         const moved = transientRef.current
         resizeHandleRef.current = null
@@ -358,7 +442,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Commit drag
+      // Drag (multi-element supported)
       if (dragOriginRef.current) {
         const moved = transientRef.current
         dragOriginRef.current = null
@@ -368,7 +452,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Commit drawing — auto-switch to select
+      // Drawing → select
       if (isShapeTool(tool as Tool)) {
         transientRef.current = []
         scheduleDraw()

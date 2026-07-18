@@ -144,6 +144,9 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [elements, selectedIds, closeCtxMenu])
 
+  // ── Copy / Paste Style state ─────────────────────────────
+  const [copiedStyle, setCopiedStyle] = useState<Partial<Element> | null>(null)
+
   // ── Select all, duplicate, nudge ─────────────────────────
   const handleSelectAll = useCallback(() => {
     setSelectedIds(elements.map((e) => e.id))
@@ -298,6 +301,29 @@ export function CanvasView(): ReactNode {
 
   const hasSelection = selectedIds.length > 0
 
+  // ── Copy / Paste Style ───────────────────────────────────
+  const handleCopyStyle = useCallback(() => {
+    if (!selectedElement) return
+    setCopiedStyle({
+      strokeColor: selectedElement.strokeColor,
+      backgroundColor: selectedElement.backgroundColor,
+      strokeWidth: selectedElement.strokeWidth,
+      strokeStyle: selectedElement.strokeStyle,
+      opacity: selectedElement.opacity,
+      roughness: selectedElement.roughness,
+    })
+    closeCtxMenu()
+  }, [selectedElement, closeCtxMenu])
+
+  const handlePasteStyle = useCallback(() => {
+    if (!copiedStyle || !hasSelection) return
+    const updated = elements
+      .filter((e) => selectedIds.includes(e.id))
+      .map((e) => ({ ...e, ...copiedStyle }))
+    upsertElements(updated)
+    closeCtxMenu()
+  }, [copiedStyle, hasSelection, elements, selectedIds, upsertElements, closeCtxMenu])
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       <canvas
@@ -406,10 +432,27 @@ export function CanvasView(): ReactNode {
           </MenuItem>
           <MenuSeparator />
 
+          <MenuItem onClick={handleCopyStyle} disabled={!selectedElement}>
+            <StyleIcon /> Copy Style
+          </MenuItem>
+          <MenuItem onClick={handlePasteStyle} disabled={!copiedStyle || !hasSelection}>
+            <PasteStyleIcon /> Paste Style
+          </MenuItem>
+          <MenuSeparator />
+
           <MenuItem onClick={handleCopyPNG} disabled={!hasSelection}>
             <PNGIcon /> Copy to Clipboard as PNG
           </MenuItem>
         </ContextMenu>
+      )}
+
+      {/* Element count badge */}
+      {hasSelection && (
+        <div className="pointer-events-none absolute bottom-6 right-24">
+          <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+            {selectedIds.length} selected
+          </span>
+        </div>
       )}
     </div>
   )
@@ -490,6 +533,20 @@ function PNGIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+    </svg>
+  )
+}
+function StyleIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+    </svg>
+  )
+}
+function PasteStyleIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3h4a2 2 0 012 2v2" /><path d="M16 17h4a2 2 0 002-2V7l-4-4h-4" /><rect x="2" y="11" width="10" height="10" rx="1" />
     </svg>
   )
 }

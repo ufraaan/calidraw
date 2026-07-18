@@ -20,14 +20,17 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
+    const handleScroll = () => onClose()
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick)
       document.addEventListener('keydown', handleEsc)
+      window.addEventListener('scroll', handleScroll, true)
     }, 0)
     return () => {
       clearTimeout(timer)
       document.removeEventListener('mousedown', handleClick)
       document.removeEventListener('keydown', handleEsc)
+      window.removeEventListener('scroll', handleScroll, true)
     }
   }, [onClose])
 
