@@ -4,7 +4,7 @@ import { useElements } from '../hooks/use-elements'
 import { useKeyboard } from '../hooks/use-keyboard'
 import { useCanvas } from '../hooks/use-canvas'
 import { Toolbar } from './toolbar'
-import { TopBar } from './top-bar'
+import { ZoomControl } from './zoom-control'
 import type { ReactNode } from 'react'
 
 const TOOL_CURSOR: Record<string, string> = {
@@ -42,8 +42,8 @@ export function CanvasView(): ReactNode {
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
-      <TopBar />
       <Toolbar />
+      <ZoomControl />
     </div>
   )
 }
