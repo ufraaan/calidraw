@@ -5,7 +5,6 @@
     <sub>hand-drawn style canvas · rough.js · react</sub>
     <br>
     <br>
-    <code>◇</code>
     <br>
     <br>
     <kbd>v</kbd> <kbd>r</kbd> <kbd>d</kbd> <kbd>o</kbd> <kbd>a</kbd> <kbd>l</kbd> <kbd>p</kbd> <kbd>t</kbd> <kbd>h</kbd>
