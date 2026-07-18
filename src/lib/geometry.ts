@@ -78,7 +78,7 @@ export function generateId(): string {
 
 // ── Resize ─────────────────────────────────────────────────
 
-export type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br' | 'tm' | 'rm' | 'bm' | 'lm'
+export type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br' | 'tm' | 'rm' | 'bm' | 'lm' | 'start' | 'end'
 
 const HANDLE_NAMES: ResizeHandle[] = ['tl', 'tr', 'br', 'bl', 'tm', 'rm', 'bm', 'lm']
 
@@ -98,8 +98,15 @@ export function getNormalizedBounds(element: Element): {
   }
 }
 
-/** Returns the 8 resize-handle positions in canvas coords. */
+/** Returns the resize-handle positions in canvas coords. */
 export function getResizeHandles(element: Element): Point[] {
+  // For arrows: only start and endpoint handles
+  if (element.type === 'arrow') {
+    return [
+      { x: element.x, y: element.y },                     // start (tail)
+      { x: element.x + element.width, y: element.y + element.height }, // end (head)
+    ]
+  }
   const { x, y, w, h } = getNormalizedBounds(element)
   return [
     { x, y },                 // tl
@@ -124,24 +131,44 @@ export function hitTestResizeHandle(
   point: Point,
   element: Element,
 ): ResizeHandle | null {
+  const threshold = 7
+
+  // Arrows: hit-test the two endpoints
+  if (element.type === 'arrow') {
+    const start = { x: element.x, y: element.y }
+    const end = { x: element.x + element.width, y: element.y + element.height }
+
+    if (
+      Math.abs(point.x - start.x) <= threshold &&
+      Math.abs(point.y - start.y) <= threshold
+    ) {
+      return 'start'
+    }
+    if (
+      Math.abs(point.x - end.x) <= threshold &&
+      Math.abs(point.y - end.y) <= threshold
+    ) {
+      return 'end'
+    }
+    return null
+  }
+
   const b = getNormalizedBounds(element)
 
   // For very small elements, fall back to the bounding box
   if (b.w < 8 || b.h < 8) {
     const handles = getResizeHandles(element)
-    const threshold = 8
+    const thresh = 8
     for (let i = 0; i < handles.length; i++) {
       if (
-        Math.abs(point.x - handles[i].x) <= threshold &&
-        Math.abs(point.y - handles[i].y) <= threshold
+        Math.abs(point.x - handles[i].x) <= thresh &&
+        Math.abs(point.y - handles[i].y) <= thresh
       ) {
         return HANDLE_NAMES[i]
       }
     }
     return null
   }
-
-  const threshold = 7
 
   // 1) Corners — point hit (takes priority)
   const corners: { handle: ResizeHandle; x: number; y: number }[] = [
@@ -208,6 +235,25 @@ export function getResizedElement(
   mouse: Point,
   aspectLock: boolean,
 ): Element {
+  // ── Arrow endpoint dragging ──────────────────────────────
+  // Dragging one endpoint keeps the opposite end anchored.
+  if (element.type === 'arrow') {
+    if (handle === 'start') {
+      // Keep end fixed, move start to mouse
+      const endX = element.x + element.width
+      const endY = element.y + element.height
+      const nx = mouse.x
+      const ny = mouse.y
+      return { ...element, x: nx, y: ny, width: endX - nx, height: endY - ny }
+    }
+    if (handle === 'end') {
+      // Keep start fixed, move end to mouse
+      const nx = element.x
+      const ny = element.y
+      return { ...element, x: nx, y: ny, width: mouse.x - nx, height: mouse.y - ny }
+    }
+  }
+
   const b = getNormalizedBounds(element)
   let nx = b.x
   let ny = b.y

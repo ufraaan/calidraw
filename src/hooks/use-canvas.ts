@@ -36,6 +36,8 @@ const RESIZE_CURSOR: Record<ResizeHandle, string> = {
   rm: 'ew-resize',
   bm: 'ns-resize',
   lm: 'ew-resize',
+  start: 'move',
+  end: 'crosshair',
 }
 
 export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCanvasOptions) {

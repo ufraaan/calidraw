@@ -230,6 +230,7 @@ function renderSelectionIndicator(
     ctx.translate(-b.cx, -b.cy)
   }
 
+  // Bounding box dash
   ctx.strokeStyle = BRAND
   ctx.lineWidth = 1 * s
   ctx.setLineDash([3 * s, 4 * s])
@@ -237,23 +238,38 @@ function renderSelectionIndicator(
   ctx.setLineDash([])
 
   const r = 3 * s
-  const pts: Point[] = [
-    { x, y },
-    { x: x + w, y },
-    { x: x + w, y: y + h },
-    { x, y: y + h },
-    { x: x + w / 2, y },
-    { x: x + w, y: y + h / 2 },
-    { x: x + w / 2, y: y + h },
-    { x, y: y + h / 2 },
-  ]
+
+  // ── Handle positions ─────────────────────────────────────
+  // Arrows show only start/end endpoint handles; everything
+  // else gets the full 8-point bounding-box set.
+  let pts: Point[]
+  if (el.type === 'arrow') {
+    pts = [
+      { x: el.x, y: el.y },                           // start (tail)
+      { x: el.x + el.width, y: el.y + el.height },    // end (head)
+    ]
+  } else {
+    pts = [
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+      { x: x + w / 2, y },
+      { x: x + w, y: y + h / 2 },
+      { x: x + w / 2, y: y + h },
+      { x, y: y + h / 2 },
+    ]
+  }
 
   ctx.fillStyle = '#ffffff'
   ctx.strokeStyle = BRAND
   ctx.lineWidth = 1.5 * s
+
+  // Arrow endpoint handles are slightly larger for easier grabbing
+  const handleR = el.type === 'arrow' ? r * 2 : r
   for (const p of pts) {
     ctx.beginPath()
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, handleR, 0, Math.PI * 2)
     ctx.fill()
     ctx.stroke()
   }
