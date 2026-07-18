@@ -12,9 +12,10 @@ import { useCanvas } from '../hooks/use-canvas'
 import { Toolbar } from './toolbar'
 import { ZoomControl } from './zoom-control'
 import { ContextMenu, MenuItem, MenuSeparator } from './context-menu'
-import { copyToClipboardAsPNG, downloadAsPNG } from '../lib/renderer'
+import { ExportModal } from './export-modal'
+import { copyToClipboardAsPNG } from '../lib/renderer'
 import { generateId, getNormalizedBounds } from '../lib/geometry'
-import { IconPhoto, IconDownload } from '@tabler/icons-react'
+import { IconDownload } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 import type { Element } from '../types'
 
@@ -41,6 +42,9 @@ export function CanvasView(): ReactNode {
     y: number
   } | null>(null)
 
+  // ── Export modal state ─────────────────────────────────────
+  const [showExport, setShowExport] = useState(false)
+
   const closeCtxMenu = useCallback(() => setCtxMenu(null), [])
 
   // ── Canvas handlers ───────────────────────────────────────
@@ -51,7 +55,6 @@ export function CanvasView(): ReactNode {
       onElementsUpdate: upsertElements,
     })
 
-  // ── Multi-select: ctrl/cmd+click toggle ───────────────────
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       closeCtxMenu()
@@ -66,24 +69,20 @@ export function CanvasView(): ReactNode {
       e.preventDefault()
       e.stopPropagation()
 
-      // Convert client coords to canvas coords
       const s = canvasStore.state
       const cx = (e.clientX - s.offsetX) / s.zoom
       const cy = (e.clientY - s.offsetY) / s.zoom
 
-      // Hit-test elements (top-most first)
       const hit = [...elements].reverse().find((el) => {
         const b = getNormalizedBounds(el)
         return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h
       })
 
       if (hit) {
-        // If the clicked element isn't selected, select only it
         if (!selectedIds.includes(hit.id)) {
           setSelectedIds([hit.id])
         }
       } else {
-        // Clicked empty space → deselect all
         setSelectedIds([])
       }
 
@@ -111,7 +110,6 @@ export function CanvasView(): ReactNode {
 
   const handlePaste = useCallback(() => {
     if (clipboardElements.length === 0) return
-    // Paste at viewport center
     const s = canvasStore.state
     const cx = (window.innerWidth / 2 - s.offsetX) / s.zoom
     const cy = (window.innerHeight / 2 - s.offsetY) / s.zoom
@@ -140,7 +138,12 @@ export function CanvasView(): ReactNode {
     setSelectedIds([])
   }, [selectedIds, deleteElements])
 
-  // Set clipboard actions for keyboard shortcuts
+  const handleCopyPNG = useCallback(async () => {
+    if (selectedIds.length === 0) return
+    await copyToClipboardAsPNG(elements, selectedIds)
+    closeCtxMenu()
+  }, [elements, selectedIds, closeCtxMenu])
+
   useEffect(() => {
     setClipboardActions({
       copy: handleCopy,
@@ -174,11 +177,7 @@ export function CanvasView(): ReactNode {
               const s = canvasStore.state
               const vpCx = (window.innerWidth / 2 - s.offsetX) / s.zoom
               const vpCy = (window.innerHeight / 2 - s.offsetY) / s.zoom
-              const scale = Math.min(
-                400 / img.width,
-                400 / img.height,
-                1,
-              )
+              const scale = Math.min(400 / img.width, 400 / img.height, 1)
               const w = img.width * scale
               const h = img.height * scale
 
@@ -227,7 +226,6 @@ export function CanvasView(): ReactNode {
       x: cx - el.width / 2,
       width: -el.width,
     }
-    // Mirror points for line/pencil
     if (newEl.points) {
       newEl.points = newEl.points.map((p) => ({
         x: cx + (cx - p.x),
@@ -257,26 +255,6 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [selectedElement, upsertElement, closeCtxMenu])
 
-  const handleCopyPNG = useCallback(async () => {
-    if (selectedIds.length === 0) return
-    await copyToClipboardAsPNG(elements, selectedIds)
-    closeCtxMenu()
-  }, [elements, selectedIds, closeCtxMenu])
-
-  // ── Export ─────────────────────────────────────────────────
-  const handleExportAll = useCallback(() => {
-    downloadAsPNG(elements, [], `calidraw-export-${Date.now()}.png`)
-  }, [elements])
-
-  const handleExportSelected = useCallback(() => {
-    if (selectedIds.length === 0) return
-    downloadAsPNG(
-      elements,
-      selectedIds,
-      `calidraw-selection-${Date.now()}.png`,
-    )
-  }, [elements, selectedIds])
-
   const hasSelection = selectedIds.length > 0
 
   return (
@@ -292,34 +270,33 @@ export function CanvasView(): ReactNode {
         onContextMenu={handleContextMenu}
       />
 
-      {/* Export button above left toolbar */}
-      <div className="pointer-events-auto absolute left-4 top-4 flex gap-1">
+      {/* Export button — top left */}
+      <div className="pointer-events-auto absolute left-4 top-4">
         <button
           type="button"
-          title="Export All as PNG"
-          onClick={handleExportAll}
+          onClick={() => setShowExport(true)}
+          title="Export"
           className="flex size-8 items-center justify-center rounded-md text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 dark:text-zinc-500 dark:hover:text-zinc-200"
         >
           <IconDownload {...p} />
-        </button>
-        <button
-          type="button"
-          title="Export Selection as PNG"
-          onClick={handleExportSelected}
-          disabled={!hasSelection}
-          className="flex size-8 items-center justify-center rounded-md text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 disabled:opacity-30 dark:text-zinc-500 dark:hover:text-zinc-200"
-        >
-          <IconPhoto {...p} />
         </button>
       </div>
 
       <Toolbar elements={elements} onElementUpdate={upsertElement} />
       <ZoomControl />
 
+      {/* Export Modal */}
+      {showExport && (
+        <ExportModal
+          elements={elements}
+          selectedIds={selectedIds}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
       {/* Context Menu */}
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={closeCtxMenu}>
-          {/* Flip */}
           <MenuItem onClick={flipHorizontal} disabled={!selectedElement}>
             <FlipHIcon /> Flip Horizontal
           </MenuItem>
@@ -328,22 +305,52 @@ export function CanvasView(): ReactNode {
           </MenuItem>
           <MenuSeparator />
 
-          {/* Ordering */}
-          <MenuItem onClick={() => { if (selectedElement) { bringToFront(selectedElement.id); closeCtxMenu() } }} disabled={!selectedElement}>
+          <MenuItem
+            onClick={() => {
+              if (selectedElement) {
+                bringToFront(selectedElement.id)
+                closeCtxMenu()
+              }
+            }}
+            disabled={!selectedElement}
+          >
             <BringFrontIcon /> Bring to Front
           </MenuItem>
-          <MenuItem onClick={() => { if (selectedElement) { bringForward(selectedElement.id); closeCtxMenu() } }} disabled={!selectedElement}>
+          <MenuItem
+            onClick={() => {
+              if (selectedElement) {
+                bringForward(selectedElement.id)
+                closeCtxMenu()
+              }
+            }}
+            disabled={!selectedElement}
+          >
             <BringForwardIcon /> Bring Forward
           </MenuItem>
-          <MenuItem onClick={() => { if (selectedElement) { sendBackward(selectedElement.id); closeCtxMenu() } }} disabled={!selectedElement}>
+          <MenuItem
+            onClick={() => {
+              if (selectedElement) {
+                sendBackward(selectedElement.id)
+                closeCtxMenu()
+              }
+            }}
+            disabled={!selectedElement}
+          >
             <SendBackwardIcon /> Send Backward
           </MenuItem>
-          <MenuItem onClick={() => { if (selectedElement) { sendToBack(selectedElement.id); closeCtxMenu() } }} disabled={!selectedElement}>
+          <MenuItem
+            onClick={() => {
+              if (selectedElement) {
+                sendToBack(selectedElement.id)
+                closeCtxMenu()
+              }
+            }}
+            disabled={!selectedElement}
+          >
             <SendBackIcon /> Send to Back
           </MenuItem>
           <MenuSeparator />
 
-          {/* Copy/Cut/Paste/Delete */}
           <MenuItem onClick={handleCopy} disabled={!hasSelection}>
             <CopyIcon /> Copy
           </MenuItem>
@@ -358,7 +365,6 @@ export function CanvasView(): ReactNode {
           </MenuItem>
           <MenuSeparator />
 
-          {/* Copy as PNG */}
           <MenuItem onClick={handleCopyPNG} disabled={!hasSelection}>
             <PNGIcon /> Copy to Clipboard as PNG
           </MenuItem>
@@ -371,77 +377,77 @@ export function CanvasView(): ReactNode {
 // ── Simple SVG icons for the context menu ──────────────────
 function FlipHIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12h18" /><path d="M7 16l-4-4 4-4" /><path d="M17 16l4-4-4-4" /><path d="M12 3v18" />
     </svg>
   )
 }
 function FlipVIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3v18" /><path d="M16 7l4 4-4 4" /><path d="M8 7l-4 4 4 4" /><path d="M3 12h18" />
     </svg>
   )
 }
 function BringFrontIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="8" y="2" width="14" height="14" rx="2" /><rect x="2" y="8" width="14" height="14" rx="2" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="2" width="14" height="14" rx="2" /><rect x="2" y="8" width="14" height="14" rx="2" opacity="0.3" />
     </svg>
   )
 }
 function BringForwardIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="8" y="2" width="14" height="14" rx="2" /><path d="M2 18v-4h4v4H2z" opacity="0.4" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="2" width="14" height="14" rx="2" /><path d="M2 18v-4h4v4H2z" opacity="0.3" />
     </svg>
   )
 }
 function SendBackwardIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="8" width="14" height="14" rx="2" /><path d="M22 6v4h-4V6h4z" opacity="0.4" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="8" width="14" height="14" rx="2" /><path d="M22 6v4h-4V6h4z" opacity="0.3" />
     </svg>
   )
 }
 function SendBackIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="8" width="14" height="14" rx="2" opacity="0.4" /><rect x="8" y="2" width="14" height="14" rx="2" opacity="0.6" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="8" width="14" height="14" rx="2" opacity="0.3" /><rect x="8" y="2" width="14" height="14" rx="2" opacity="0.5" />
     </svg>
   )
 }
 function CopyIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
     </svg>
   )
 }
 function CutIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" />
     </svg>
   )
 }
 function PasteIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="15" x2="15" y2="15" />
     </svg>
   )
 }
 function DeleteIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
     </svg>
   )
 }
 function PNGIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
     </svg>
   )

@@ -54,6 +54,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   const panStartRef = useRef<Point | null>(null)
   const dragOriginRef = useRef<{ point: Point; el: Element } | null>(null)
   const resizeHandleRef = useRef<ResizeHandle | null>(null)
+  const marqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const rafRef = useRef(0)
 
   useEffect(() => {
@@ -78,6 +79,25 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
     const visible = elementsRef.current.filter((e) => !hidden.has(e.id))
     const all = visible.concat(transientRef.current)
     renderScene(ctx, all, new Set(selectedRef.current))
+
+    // Draw selection marquee
+    const m = marqueeRef.current
+    if (m) {
+      const rx = Math.min(m.x1, m.x2)
+      const ry = Math.min(m.y1, m.y2)
+      const rw = Math.abs(m.x2 - m.x1)
+      const rh = Math.abs(m.y2 - m.y1)
+      ctx.save()
+      ctx.fillStyle = 'rgba(59,130,246,0.06)'
+      ctx.strokeStyle = '#3b82f6'
+      ctx.lineWidth = 1 / s.zoom
+      ctx.setLineDash([4 / s.zoom, 4 / s.zoom])
+      ctx.fillRect(rx, ry, rw, rh)
+      ctx.strokeRect(rx, ry, rw, rh)
+      ctx.setLineDash([])
+      ctx.restore()
+    }
+
     ctx.restore()
   }, [])
 
@@ -177,7 +197,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
           }
         }
 
-        // 2) Check for element hit (drag, multi-select, or alt-duplicate)
+        // 2) Check for element hit
         const hit = [...elementsRef.current].reverse().find((el) => hitTest(point, el))
         if (hit) {
           if (e.altKey) {
@@ -194,7 +214,6 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
               : [...selectedRef.current, hit.id]
             setSelectedIds(next)
             if (next.length > 0) {
-              // Start dragging the clicked element
               dragOriginRef.current = { point, el: { ...hit } }
             }
           } else {
@@ -202,6 +221,8 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
             dragOriginRef.current = { point, el: { ...hit } }
           }
         } else {
+          // 3) Empty space — start marquee selection
+          marqueeRef.current = { x1: point.x, y1: point.y, x2: point.x, y2: point.y }
           setSelectedIds([])
         }
         scheduleDraw()
@@ -231,6 +252,14 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
+      // Marquee selection
+      if (marqueeRef.current) {
+        marqueeRef.current.x2 = point.x
+        marqueeRef.current.y2 = point.y
+        scheduleDraw()
+        return
+      }
+
       // Resize
       if (resizeHandleRef.current && dragOriginRef.current) {
         const { el } = dragOriginRef.current
@@ -255,12 +284,12 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
 
       // Resize cursor when hovering a handle (select tool, not dragging)
       if (tool === 'select' && !resizeHandleRef.current) {
-        const selectedEl =
+        const firstSelected =
           selectedRef.current.length > 0
             ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
             : undefined
-        if (selectedEl) {
-          const handle = hitTestResizeHandle(point, selectedEl)
+        if (firstSelected && selectedRef.current.length === 1) {
+          const handle = hitTestResizeHandle(point, firstSelected)
           if (canvasRef.current) {
             canvasRef.current.style.cursor = handle ? RESIZE_CURSOR[handle] : 'default'
           }
@@ -291,6 +320,31 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       panStartRef.current = null
       if (canvasRef.current) {
         canvasRef.current.style.cursor = TOOL_CURSOR[tool] ?? 'default'
+      }
+
+      // Commit marquee selection
+      if (marqueeRef.current) {
+        const { x1, y1, x2, y2 } = marqueeRef.current
+        marqueeRef.current = null
+
+        const mx = Math.min(x1, x2)
+        const my = Math.min(y1, y2)
+        const mw = Math.abs(x2 - x1)
+        const mh = Math.abs(y2 - y1)
+
+        // Only select if marquee is bigger than a click (>= 5px)
+        if (mw >= 5 || mh >= 5) {
+          const inside = elementsRef.current.filter((el) => {
+            const bx = el.width >= 0 ? el.x : el.x + el.width
+            const by = el.height >= 0 ? el.y : el.y + el.height
+            const bw = Math.abs(el.width)
+            const bh = Math.abs(el.height)
+            return mx < bx + bw && mx + mw > bx && my < by + bh && my + mh > by
+          })
+          setSelectedIds(inside.map((e) => e.id))
+        }
+        scheduleDraw()
+        return
       }
 
       // Commit resize

@@ -146,6 +146,7 @@ export function renderScene(
   ctx: CanvasRenderingContext2D,
   elements: Element[],
   selectedIds: Set<string>,
+  showSelection = true,
 ) {
   const canvas = ctx.canvas
   ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -184,13 +185,13 @@ export function renderScene(
 
     ctx.restore()
 
-    if (selectedIds.has(el.id)) {
+    if (showSelection && selectedIds.has(el.id)) {
       renderSelectionIndicator(ctx, el)
     }
   }
 }
 
-// ── Selection indicator ──────────────────────────────────────
+// ── Selection indicator (dashed border + tiny resize handles) ─
 function renderSelectionIndicator(
   ctx: CanvasRenderingContext2D,
   el: Element,
@@ -200,17 +201,18 @@ function renderSelectionIndicator(
   const w = Math.abs(el.width)
   const h = Math.abs(el.height)
 
+  // Thin dashed border
   ctx.save()
   ctx.strokeStyle = '#3b82f6'
   ctx.lineWidth = 1
-  ctx.setLineDash([4, 4])
+  ctx.setLineDash([3, 4])
   ctx.strokeRect(x - 2, y - 2, w + 4, h + 4)
   ctx.setLineDash([])
   ctx.restore()
 
-  // Resize handles
-  const half = 4
-  const corners: Point[] = [
+  // Tiny resize handles (3px filled circles)
+  const r = 3
+  const pts: Point[] = [
     { x, y },
     { x: x + w, y },
     { x: x + w, y: y + h },
@@ -222,22 +224,23 @@ function renderSelectionIndicator(
   ]
 
   ctx.save()
-  for (const p of corners) {
-    ctx.fillStyle = '#ffffff'
-    ctx.strokeStyle = '#3b82f6'
-    ctx.lineWidth = 1.5
-    ctx.fillRect(p.x - half, p.y - half, half * 2, half * 2)
-    ctx.strokeRect(p.x - half, p.y - half, half * 2, half * 2)
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = '#3b82f6'
+  ctx.lineWidth = 1.5
+  for (const p of pts) {
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
   }
   ctx.restore()
 }
 
-// ── Offscreen render for export / clipboard ──────────────────
+// ── Offscreen render - NO selection indicators ────────────────
 export function renderElementsToCanvas(
   elements: Element[],
-  selectedIds: Set<string>,
+  scale = 2,
 ): HTMLCanvasElement {
-  // Compute bounding box
   if (elements.length === 0) {
     const c = document.createElement('canvas')
     c.width = 1
@@ -262,35 +265,36 @@ export function renderElementsToCanvas(
   const h = Math.ceil(maxY - minY + pad * 2)
 
   const canvas = document.createElement('canvas')
-  canvas.width = w * 2 // 2x for retina
-  canvas.height = h * 2
+  canvas.width = w * scale
+  canvas.height = h * scale
   const ctx = canvas.getContext('2d')!
-  ctx.scale(2, 2)
+  ctx.scale(scale, scale)
   ctx.translate(-minX + pad, -minY + pad)
 
-  renderScene(ctx, elements, selectedIds)
+  renderScene(ctx, elements, new Set(), false)
   return canvas
 }
 
 export async function copyToClipboardAsPNG(elements: Element[], ids: string[]) {
-  const toRender = ids.length > 0
-    ? elements.filter((e) => ids.includes(e.id))
-    : elements
-  const canvas = renderElementsToCanvas(toRender, new Set(ids))
+  const toRender =
+    ids.length > 0 ? elements.filter((e) => ids.includes(e.id)) : elements
+  const canvas = renderElementsToCanvas(toRender, 2)
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, 'image/png'),
   )
   if (!blob) return
-  await navigator.clipboard.write([
-    new ClipboardItem({ 'image/png': blob }),
-  ])
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
 }
 
-export function downloadAsPNG(elements: Element[], ids: string[], filename: string) {
-  const toRender = ids.length > 0
-    ? elements.filter((e) => ids.includes(e.id))
-    : elements
-  const canvas = renderElementsToCanvas(toRender, new Set(ids))
+export function downloadAsPNG(
+  elements: Element[],
+  ids: string[],
+  filename: string,
+  scale = 2,
+) {
+  const toRender =
+    ids.length > 0 ? elements.filter((e) => ids.includes(e.id)) : elements
+  const canvas = renderElementsToCanvas(toRender, scale)
   canvas.toBlob((blob) => {
     if (!blob) return
     const url = URL.createObjectURL(blob)

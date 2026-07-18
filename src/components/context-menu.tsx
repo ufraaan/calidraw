@@ -20,7 +20,6 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
-    // Delay listener to avoid the right-click that opened it
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick)
       document.addEventListener('keydown', handleEsc)
@@ -32,14 +31,13 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
     }
   }, [onClose])
 
-  // Adjust position so menu stays inside viewport
   const adjustedX = Math.min(x, window.innerWidth - 200)
   const adjustedY = Math.min(y, window.innerHeight - 300)
 
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[180px] rounded-lg border border-black/[0.04] bg-white/90 px-1 py-1 backdrop-blur-xl shadow-[0_8px_30px_-8px_rgba(0,0,0,0.2)] dark:border-white/[0.06] dark:bg-zinc-900/90 dark:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.4)]"
+      className="fixed z-50 min-w-[172px] rounded-lg border border-zinc-200 bg-white py-1 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.15)] dark:border-zinc-700 dark:bg-zinc-900"
       style={{ left: adjustedX, top: adjustedY }}
     >
       {children}
@@ -58,10 +56,10 @@ export function MenuItem({ onClick, children, disabled }: MenuItemProps) {
     <button
       type="button"
       disabled={disabled}
-      className={`flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-left text-[13px] transition-colors ${
+      className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition-colors ${
         disabled
-          ? 'cursor-not-allowed text-zinc-300 dark:text-zinc-600'
-          : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+          ? 'cursor-default text-zinc-300 dark:text-zinc-600'
+          : 'text-zinc-600 hover:bg-zinc-100 active:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
       }`}
       onClick={onClick}
     >
@@ -72,6 +70,6 @@ export function MenuItem({ onClick, children, disabled }: MenuItemProps) {
 
 export function MenuSeparator() {
   return (
-    <div className="my-1 border-t border-black/[0.06] dark:border-white/[0.06]" />
+    <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
   )
 }
