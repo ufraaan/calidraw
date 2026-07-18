@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useSelector } from '@tanstack/react-store'
-import { canvasStore, setSelectedIds, setOffset, zoomAtPoint } from '../stores/canvas-store'
+import { canvasStore, setSelectedIds, setOffset, setTool, zoomAtPoint } from '../stores/canvas-store'
 import { renderScene } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
 import { hitTest } from '../lib/geometry'
@@ -228,12 +228,15 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
-      // Commit drawing
+      // Commit drawing — auto-switch to select
       if (isShapeTool(tool as Tool)) {
         transientRef.current = []
         scheduleDraw()
         const el = endDrawing()
-        if (el) onElementCreate(el)
+        if (el) {
+          onElementCreate(el)
+          setTool('select')
+        }
       }
     },
     [tool, onElementCreate, onElementsUpdate, scheduleDraw],
