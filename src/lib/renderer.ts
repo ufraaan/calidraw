@@ -172,4 +172,27 @@ function renderSelectionIndicator(
   ctx.strokeRect(x - 2, y - 2, w + 4, h + 4)
   ctx.setLineDash([])
   ctx.restore()
+
+  // Resize handles
+  const half = 4
+  const corners: Point[] = [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h },
+    { x: x + w / 2, y },
+    { x: x + w, y: y + h / 2 },
+    { x: x + w / 2, y: y + h },
+    { x, y: y + h / 2 },
+  ]
+
+  ctx.save()
+  for (const p of corners) {
+    ctx.fillStyle = '#ffffff'
+    ctx.strokeStyle = '#3b82f6'
+    ctx.lineWidth = 1.5
+    ctx.fillRect(p.x - half, p.y - half, half * 2, half * 2)
+    ctx.strokeRect(p.x - half, p.y - half, half * 2, half * 2)
+  }
+  ctx.restore()
 }

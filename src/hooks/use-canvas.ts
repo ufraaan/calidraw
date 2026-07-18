@@ -3,8 +3,9 @@ import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setSelectedIds, setOffset, setTool, zoomAtPoint } from '../stores/canvas-store'
 import { renderScene } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
-import { hitTest } from '../lib/geometry'
+import { hitTest, hitTestResizeHandle, getResizedElement, generateId } from '../lib/geometry'
 import type { Element, Point, Tool } from '../types'
+import type { ResizeHandle } from '../lib/geometry'
 
 interface UseCanvasOptions {
   elements: Element[]
@@ -24,6 +25,17 @@ const TOOL_CURSOR: Record<string, string> = {
   pan: 'grab',
 }
 
+const RESIZE_CURSOR: Record<ResizeHandle, string> = {
+  tl: 'nwse-resize',
+  tr: 'nesw-resize',
+  br: 'nwse-resize',
+  bl: 'nesw-resize',
+  tm: 'ns-resize',
+  rm: 'ew-resize',
+  bm: 'ns-resize',
+  lm: 'ew-resize',
+}
+
 export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCanvasOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tool = useSelector(canvasStore, (s) => s.tool)
@@ -41,6 +53,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
   const dragIdsRef = useRef<Set<string>>(new Set())
   const panStartRef = useRef<Point | null>(null)
   const dragOriginRef = useRef<{ point: Point; el: Element } | null>(null)
+  const resizeHandleRef = useRef<ResizeHandle | null>(null)
   const rafRef = useRef(0)
 
   useEffect(() => {
@@ -149,10 +162,34 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       }
 
       if (tool === 'select') {
+        const selectedEl =
+          selectedRef.current.length > 0
+            ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
+            : undefined
+
+        // 1) Check resize handles on the selected element
+        if (selectedEl) {
+          const handle = hitTestResizeHandle(point, selectedEl)
+          if (handle) {
+            resizeHandleRef.current = handle
+            dragOriginRef.current = { point, el: { ...selectedEl } }
+            return
+          }
+        }
+
+        // 2) Check for element hit (drag or alt-duplicate)
         const hit = [...elementsRef.current].reverse().find((el) => hitTest(point, el))
         if (hit) {
-          setSelectedIds([hit.id])
-          dragOriginRef.current = { point, el: { ...hit } }
+          if (e.altKey) {
+            // Alt + drag = duplicate
+            const clone: Element = { ...hit, id: generateId() }
+            onElementCreate(clone)
+            setSelectedIds([clone.id])
+            dragOriginRef.current = { point, el: clone }
+          } else {
+            setSelectedIds([hit.id])
+            dragOriginRef.current = { point, el: { ...hit } }
+          }
         } else {
           setSelectedIds([])
         }
@@ -164,7 +201,7 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         startDrawing(point)
       }
     },
-    [tool, screenToCanvas, scheduleDraw],
+    [tool, screenToCanvas, scheduleDraw, onElementCreate],
   )
 
   // ── Pointer move ──────────────────────────────────────────────
@@ -183,6 +220,17 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         return
       }
 
+      // Resize
+      if (resizeHandleRef.current && dragOriginRef.current) {
+        const { el } = dragOriginRef.current
+        const aspectLock = e.shiftKey
+        const resized = getResizedElement(el, resizeHandleRef.current, point, aspectLock)
+        dragIdsRef.current = new Set([el.id])
+        transientRef.current = [resized]
+        scheduleDraw()
+        return
+      }
+
       // Drag shape
       if (dragOriginRef.current) {
         const { point: startPoint, el } = dragOriginRef.current
@@ -192,6 +240,22 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
         transientRef.current = [{ ...el, x: el.x + dx, y: el.y + dy }]
         scheduleDraw()
         return
+      }
+
+      // Resize cursor when hovering a handle (select tool, not dragging)
+      if (tool === 'select' && !resizeHandleRef.current) {
+        const selectedEl =
+          selectedRef.current.length > 0
+            ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
+            : undefined
+        if (selectedEl) {
+          const handle = hitTestResizeHandle(point, selectedEl)
+          if (canvasRef.current) {
+            canvasRef.current.style.cursor = handle ? RESIZE_CURSOR[handle] : 'default'
+          }
+        } else if (canvasRef.current) {
+          canvasRef.current.style.cursor = 'default'
+        }
       }
 
       // Drawing preview
@@ -216,6 +280,17 @@ export function useCanvas({ elements, onElementCreate, onElementsUpdate }: UseCa
       panStartRef.current = null
       if (canvasRef.current) {
         canvasRef.current.style.cursor = TOOL_CURSOR[tool] ?? 'default'
+      }
+
+      // Commit resize
+      if (resizeHandleRef.current) {
+        const moved = transientRef.current
+        resizeHandleRef.current = null
+        dragOriginRef.current = null
+        dragIdsRef.current = new Set()
+        transientRef.current = []
+        if (moved.length > 0) onElementsUpdate(moved)
+        return
       }
 
       // Commit drag
