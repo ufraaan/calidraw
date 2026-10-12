@@ -18,6 +18,9 @@ export interface CanvasState {
   opacity: number
   roughness: number
   bowing: number
+  fontSize: number
+  fontFamily: string
+  isDark: boolean
   selectedIds: string[]
   saveStatus: SaveStatus
 }
@@ -56,18 +59,48 @@ const initialState: CanvasState = {
   opacity: 100,
   roughness: 1,
   bowing: 1,
+  fontSize: 20,
+  fontFamily: 'sans-serif',
+  isDark: detectDarkMode(),
   selectedIds: [],
   saveStatus: 'idle',
 }
 
 export const canvasStore = createStore(initialState)
 
+let povTimer: ReturnType<typeof setTimeout> | null = null
+
 function savePOV() {
-  const s = canvasStore.state
-  localStorage.setItem(
-    POV_KEY,
-    JSON.stringify({ zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY }),
-  )
+  // Debounced — pan/zoom fire dozens of events/sec, localStorage is sync.
+  if (povTimer) return
+  povTimer = setTimeout(() => {
+    povTimer = null
+    try {
+      const s = canvasStore.state
+      localStorage.setItem(
+        POV_KEY,
+        JSON.stringify({ zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY }),
+      )
+    } catch {
+      /* quota / private mode — ignore */
+    }
+  }, 500)
+}
+
+export function flushPOV() {
+  if (povTimer) {
+    clearTimeout(povTimer)
+    povTimer = null
+  }
+  try {
+    const s = canvasStore.state
+    localStorage.setItem(
+      POV_KEY,
+      JSON.stringify({ zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY }),
+    )
+  } catch {
+    /* ignore */
+  }
 }
 
 export function setTool(tool: Tool) {
@@ -114,6 +147,30 @@ export function setBowing(bowing: number) {
   canvasStore.setState((s) => ({ ...s, bowing }))
 }
 
+export function setStrokeStyle(style: CanvasState['strokeStyle']) {
+  canvasStore.setState((s) => ({ ...s, strokeStyle: style }))
+}
+
+export function setRoughness(roughness: number) {
+  canvasStore.setState((s) => ({ ...s, roughness }))
+}
+
+export function setFontSize(fontSize: number) {
+  canvasStore.setState((s) => ({ ...s, fontSize }))
+}
+
+export function setFontFamily(fontFamily: string) {
+  canvasStore.setState((s) => ({ ...s, fontFamily }))
+}
+
+export function setTheme(isDark: boolean) {
+  canvasStore.setState((s) => ({
+    ...s,
+    isDark,
+    strokeColor: isDark ? DEFAULT_DARK : DEFAULT_LIGHT,
+  }))
+}
+
 export function setSelectedIds(ids: string[]) {
   canvasStore.setState((s) => ({ ...s, selectedIds: ids }))
 }
@@ -144,6 +201,7 @@ export function startColorSchemeListener(): () => void {
     const isDark = e.matches
     canvasStore.setState((s) => ({
       ...s,
+      isDark,
       strokeColor: isDark ? DEFAULT_DARK : DEFAULT_LIGHT,
     }))
     colorSchemeSubscriber?.(isDark)
@@ -157,6 +215,15 @@ export function startColorSchemeListener(): () => void {
 let zoomAnimation: number | null = null
 
 export function animateZoom(targetZoom: number, cx?: number, cy?: number) {
+  // Respect reduced motion — jump immediately.
+  try {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      zoomAtPoint(Math.max(0.1, Math.min(5, targetZoom)), cx, cy)
+      return
+    }
+  } catch {
+    /* ignore */
+  }
   const startZoom = canvasStore.state.zoom
   const clampedTarget = Math.max(0.1, Math.min(5, targetZoom))
   const startTime = performance.now()
