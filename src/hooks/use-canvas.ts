@@ -43,6 +43,7 @@ const RESIZE_CURSOR: Record<ResizeHandle, string> = {
 
 export function useCanvas({ elements, editingTextId, onElementCreate, onElementsUpdate }: UseCanvasOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
   const tool = useSelector(canvasStore, (s) => s.tool)
   const zoom = useSelector(canvasStore, (s) => s.zoom)
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
@@ -71,12 +72,18 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    let ctx = ctxRef.current
+    if (!ctx) {
+      ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctxRef.current = ctx
+    }
     const s = canvasStore.state
+    const dpr = window.devicePixelRatio || 1
 
-    ctx.save()
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // Base transform (DPR) + world transform. renderScene clears
+    // in device pixels and culls against this transform.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.translate(s.offsetX, s.offsetY)
     ctx.scale(s.zoom, s.zoom)
 
@@ -85,7 +92,15 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     // Build set of selected IDs for rendering
     const sel = new Set(selectedRef.current)
 
-    // Hover highlight
+    const all = visible.concat(transientRef.current)
+    // When editing text, don't render the element on canvas — it's
+    // overlaid by the DOM textarea and would cause visual overlap.
+    const toRender = editingTextId
+      ? all.filter((el) => el.type !== 'text' || el.id !== editingTextId)
+      : all
+    renderScene(ctx, toRender, sel, true, s.zoom)
+
+    // Hover highlight (after scene — renderScene clears first)
     if (tool === 'select' && !dragOriginRef.current && !resizeHandleRef.current && hoveredElRef.current) {
       const hov = elementsRef.current.find((e) => e.id === hoveredElRef.current)
       if (hov && !sel.has(hov.id)) {
@@ -102,14 +117,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         ctx.restore()
       }
     }
-
-    const all = visible.concat(transientRef.current)
-    // When editing text, don't render the element on canvas — it's
-    // overlaid by the DOM textarea and would cause visual overlap.
-    const toRender = editingTextId
-      ? all.filter((el) => el.type !== 'text' || el.id !== editingTextId)
-      : all
-    renderScene(ctx, toRender, sel, true, s.zoom)
 
     // Marquee
     const m = marqueeRef.current
@@ -155,20 +162,15 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
       ctx.restore()
     }
 
-    // Laser pointer trail
+    // Laser pointer trail (no shadowBlur — expensive; fresh instance per frame is fine)
     const laserPts = laserPointsRef.current
     if (laserPts.length >= 2) {
       // Keep only the most recent points — trail has a max visible length.
-      // As you move further from where you started, old points drop off,
-      // creating the "snake tail" effect.
       const maxTrail = 60
       const recent = laserPts.length > maxTrail
         ? laserPts.slice(laserPts.length - maxTrail)
         : laserPts
 
-      // `sizeMapping` controls how thick the stroke is at each point.
-      // `currentIndex / totalLength` = 0 at tail (oldest point), 1 at head (cursor).
-      // This creates a taper: tail is thin/fading, cursor end is full thickness.
       const stroke = new LaserPointer({
         size: 3,
         streamline: 0.35,
@@ -183,9 +185,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
       const outline = stroke.getStrokeOutline()
       if (outline.length >= 3) {
         ctx.save()
-        // Glow
-        ctx.shadowColor = 'rgba(239,68,68,0.5)'
-        ctx.shadowBlur = 20 / s.zoom
         ctx.beginPath()
         ctx.moveTo(outline[0][0], outline[0][1])
         for (let i = 1; i < outline.length; i++) {
@@ -194,14 +193,9 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         ctx.closePath()
         ctx.fillStyle = '#ef4444'
         ctx.fill()
-        // Core layer (no shadow, bright center)
-        ctx.shadowColor = 'transparent'
-        ctx.fill()
         ctx.restore()
       }
     }
-
-    ctx.restore()
   }, [tool])
 
   const scheduleDraw = useCallback(() => {
@@ -209,16 +203,18 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     rafRef.current = requestAnimationFrame(draw)
   }, [draw])
 
-  // ── Canvas setup ──────────────────────────────────────────
+  // ── Canvas setup (DPR-aware) ──────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
 
     const resize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = Math.floor(window.innerWidth * dpr)
+      canvas.height = Math.floor(window.innerHeight * dpr)
+      canvas.style.width = `${window.innerWidth}px`
+      canvas.style.height = `${window.innerHeight}px`
+      ctxRef.current = canvas.getContext('2d')
     }
     resize()
     window.addEventListener('resize', resize)
@@ -383,9 +379,14 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         // 2b) If clicking inside the bounding box of an already-selected
         //     element, drag from anywhere in the box (not just on stroke).
         if (selectedRef.current.length > 0) {
-          const inSelBox = [...elementsRef.current]
-            .filter((el) => selectedRef.current.includes(el.id))
-            .find((el) => pointInBounds(point, getElementBounds(el)))
+          const selSet = new Set(selectedRef.current)
+          let inSelBox: Element | undefined
+          for (const el of elementsRef.current) {
+            if (selSet.has(el.id) && pointInBounds(point, getElementBounds(el))) {
+              inSelBox = el
+              break
+            }
+          }
           if (inSelBox) {
             const snaps = snapshotSelection(selectedRef.current)
             if (snaps.length > 0) {
@@ -396,8 +397,17 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           }
         }
 
-        // 2) Element hit
-        const hit = [...elementsRef.current].reverse().find((el) => hitTest(point, el))
+        // 2) Element hit (topmost first — reverse loop, no allocation)
+        let hit: Element | undefined
+        {
+          const arr = elementsRef.current
+          for (let i = arr.length - 1; i >= 0; i--) {
+            if (hitTest(point, arr[i])) {
+              hit = arr[i]
+              break
+            }
+          }
+        }
         if (hit) {
           const alreadyInSel = selectedRef.current.includes(hit.id)
           const isMultiSel = selectedRef.current.length > 1
@@ -454,8 +464,8 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           bowing: 0,
           opacity: state.opacity,
           text: '',
-          fontFamily: 'sans-serif',
-          fontSize: 20,
+          fontFamily: state.fontFamily,
+          fontSize: state.fontSize,
         }
         onElementCreate(el)
         // Auto-switch to select so the text editor can take focus
@@ -564,8 +574,17 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         }
 
         if (!cursorSet) {
-          // Hover highlight
-          const hit = [...elementsRef.current].reverse().find((el) => hitTest(point, el))
+          // Hover highlight (reverse loop, no allocation)
+          let hit: Element | undefined
+          {
+            const arr = elementsRef.current
+            for (let i = arr.length - 1; i >= 0; i--) {
+              if (hitTest(point, arr[i])) {
+                hit = arr[i]
+                break
+              }
+            }
+          }
           if (hit) {
             hoveredElRef.current = hit.id
             // Show move cursor when hovering an element
