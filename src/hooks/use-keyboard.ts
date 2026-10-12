@@ -25,6 +25,9 @@ export interface ClipboardActions {
   nudge: (dx: number, dy: number) => void
   undo: () => void
   redo: () => void
+  zoomFit?: () => void
+  zoomSelection?: () => void
+  exportCanvas?: () => void
 }
 
 let clipboardActions: ClipboardActions = {
@@ -52,6 +55,15 @@ export function copyToClipboard(elements: Element[]) {
 
 let spacePanPrevTool: Tool | null = null
 
+function isEditableTarget(e: KeyboardEvent): boolean {
+  const t = e.target as HTMLElement | null
+  if (!t) return false
+  const tag = t.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (t.isContentEditable) return true
+  return false
+}
+
 export function useKeyboard() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -59,10 +71,17 @@ export function useKeyboard() {
       const mod = e.ctrlKey || e.metaKey
       const shift = e.shiftKey
 
-      // Space → temporary pan (skip if typing in an input)
+      // Escape always works (exit text edit / close menus / select tool)
+      if (key === 'escape') {
+        setTool('select')
+        return
+      }
+
+      // Don't hijack typing in inputs/textareas/contentEditable.
+      if (isEditableTarget(e)) return
+
+      // Space → temporary pan
       if (e.key === ' ' && !mod) {
-        const tag = (e.target as HTMLElement)?.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return
         e.preventDefault()
         if (spacePanPrevTool === null) {
           spacePanPrevTool = canvasStore.state.tool as Tool
@@ -71,15 +90,21 @@ export function useKeyboard() {
         return
       }
 
-      // Escape → select
-      if (key === 'escape') {
-        setTool('select')
-        return
-      }
-
       // Tool shortcuts (only when no modifier is held)
       if (!mod && !shift && key in toolKeyMap) {
         setTool(toolKeyMap[key])
+        return
+      }
+
+      // Shift+1 → zoom to fit, Shift+2 → zoom to selection
+      if (!mod && shift && (e.key === '!' || e.key === '1')) {
+        e.preventDefault()
+        clipboardActions.zoomFit?.()
+        return
+      }
+      if (!mod && shift && (e.key === '@' || e.key === '2')) {
+        e.preventDefault()
+        clipboardActions.zoomSelection?.()
         return
       }
 
@@ -101,6 +126,10 @@ export function useKeyboard() {
               clipboardActions.undo()
             }
             return
+          case 'y':
+            e.preventDefault()
+            clipboardActions.redo()
+            return
           case 'a':
             e.preventDefault()
             clipboardActions.selectAll()
@@ -121,14 +150,18 @@ export function useKeyboard() {
             e.preventDefault()
             clipboardActions.duplicate()
             return
+          case 'e':
+            e.preventDefault()
+            clipboardActions.exportCanvas?.()
+            return
           case '=':
           case '+':
             e.preventDefault()
-            zoomAtPoint(Math.min(5, getCurrentZoom() + 0.1))
+            zoomAtPoint(Math.min(5, canvasStore.state.zoom + 0.1))
             return
           case '-':
             e.preventDefault()
-            zoomAtPoint(Math.max(0.1, getCurrentZoom() - 0.1))
+            zoomAtPoint(Math.max(0.1, canvasStore.state.zoom - 0.1))
             return
           case '0':
             e.preventDefault()
@@ -174,12 +207,4 @@ export function useKeyboard() {
       window.removeEventListener('keyup', handleKeyUp)
     }
   }, [])
-}
-
-function getCurrentZoom(): number {
-  try {
-    return JSON.parse(localStorage.getItem('calidraw-pov') ?? '{}').zoom ?? 1
-  } catch {
-    return 1
-  }
 }
