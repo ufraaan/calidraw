@@ -36,11 +36,8 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
   const saveStatus = useSelector(canvasStore, (s) => s.saveStatus)
   const hasSelection = selectedIds.length > 0
 
-  const glass =
-    'bg-white/70 backdrop-blur-xl border border-black/[0.04] shadow-[0_1px_4px_-2px_rgba(0,0,0,0.08)] dark:bg-zinc-900/70 dark:border-white/[0.06] dark:shadow-[0_1px_4px_-2px_rgba(0,0,0,0.3)]'
-
   return (
-    <div className={`pointer-events-auto absolute bottom-6 right-6 flex items-center rounded-lg ${glass} px-3 py-1.5 gap-2`}>
+    <div className="ui-panel pointer-events-auto absolute bottom-6 right-6 flex items-center gap-2 px-3 py-2">
       {/* Auto-save indicator (separate concern, always rendered for layout stability) */}
       <div className="flex items-center gap-1.5" aria-live="polite">
         <div
@@ -52,20 +49,20 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
                 : 'bg-zinc-300 dark:bg-zinc-600'
           }`}
         />
-        <span className="min-w-[3.2rem] text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+        <span className="ui-faint ui-nums min-w-[3.2rem]">
           {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
         </span>
       </div>
 
-      <div className="h-4 w-px bg-black/[0.06] dark:bg-white/[0.06]" />
+      <div className="ui-div h-4 w-px" />
 
       {/* Element count */}
       {hasSelection && (
         <>
-          <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 whitespace-nowrap">
+          <span className="ui-faint ui-nums whitespace-nowrap">
             {selectedIds.length} selected
           </span>
-          <div className="h-4 w-px bg-black/[0.06] dark:bg-white/[0.06]" />
+          <div className="ui-div h-4 w-px" />
         </>
       )}
 
@@ -74,7 +71,7 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         type="button"
         aria-label="Zoom out"
         onClick={() => animateZoom(zoom - 0.1)}
-        className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
+        className="ui-iconbtn size-6 min-h-6 min-w-6"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <circle cx="11" cy="11" r="8" />
@@ -84,13 +81,13 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
       </button>
 
       {/* Zoom percentage + presets */}
-      <label className="sr-only" htmlFor="zoom-preset">Zoom level</label>
+      <label className="ui-faint sr-only" htmlFor="zoom-preset">Zoom level</label>
       <select
         id="zoom-preset"
         aria-label="Zoom level presets"
         value={Math.round(zoom * 100)}
         onChange={(e) => animateZoom(Number(e.target.value) / 100)}
-        className="min-w-[3.5rem] rounded bg-transparent text-center text-xs font-medium tabular-nums tracking-tight text-zinc-500 dark:text-zinc-400"
+        className="ui-select ui-nums"
       >
         {[25, 50, 75, 100, 150, 200].map((p) => (
           <option key={p} value={p}>{p}%</option>
@@ -105,7 +102,7 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         type="button"
         aria-label="Zoom in"
         onClick={() => animateZoom(zoom + 0.1)}
-        className="flex size-6 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
+        className="ui-iconbtn size-6 min-h-6 min-w-6"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <circle cx="11" cy="11" r="8" />
@@ -115,14 +112,14 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         </svg>
       </button>
 
-      <div className="h-4 w-px bg-black/[0.06] dark:bg-white/[0.06]" />
+      <div className="ui-div h-4 w-px" />
 
       {/* Fit / selection */}
       <button
         type="button"
         title="Zoom to fit (Shift+1)"
         onClick={onFit}
-        className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#e8a07a] dark:hover:text-[#e8a07a]"
+        className="ui-btn"
       >
         Fit
       </button>
@@ -131,7 +128,7 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
           type="button"
           title="Zoom to selection (Shift+2)"
           onClick={onFitSelection}
-          className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#e8a07a] dark:hover:text-[#e8a07a]"
+          className="ui-btn"
         >
           Sel
         </button>
@@ -142,7 +139,7 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         type="button"
         title="Reset zoom to 100%"
         onClick={() => animateZoom(1)}
-        className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#e8a07a] dark:hover:text-[#e8a07a]"
+        className="ui-btn"
       >
         Reset
       </button>

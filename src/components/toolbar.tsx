@@ -94,7 +94,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
       <div
         role="toolbar"
         aria-label="Drawing tools"
-        className="pointer-events-auto absolute left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-px rounded-lg border border-black/[0.06] bg-white/95 p-1 backdrop-blur-xl shadow-[0_4px_16px_-4px_rgba(0,0,0,0.10),0_1px_3px_-1px_rgba(0,0,0,0.06)] dark:border-white/[0.08] dark:bg-zinc-900/95 dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.35),0_1px_3px_-1px_rgba(0,0,0,0.2)]"
+        className="ui-panel pointer-events-auto absolute left-4 top-1/2 flex -translate-y-1/2 flex-col items-center gap-0.5 p-2"
       >
         {tools.map((t) => (
           <IconButton
@@ -110,9 +110,9 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
         ))}
       </div>
 
-      {/* Bottom bar — wraps on small screens */}
-      <div className="pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2 flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-lg border border-black/[0.06] bg-white/95 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_4px_16px_-4px_rgba(0,0,0,0.10),0_1px_3px_-1px_rgba(0,0,0,0.06)] dark:border-white/[0.08] dark:bg-zinc-900/95 dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.35),0_1px_3px_-1px_rgba(0,0,0,0.2)]">
-        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Stroke</span>
+      {/* Bottom style bar — wraps on small screens */}
+      <div className="ui-panel pointer-events-auto absolute bottom-6 left-1/2 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 px-3 py-2">
+        <span className="ui-label">Stroke</span>
         <ColorPicker
           label="stroke"
           color={strokeColor}
@@ -136,8 +136,8 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
             update({ bowing: b })
           }}
         />
-        <div className="w-px h-4 bg-black/[0.06] dark:bg-white/[0.06]" />
-        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Fill</span>
+        <div className="ui-div h-4 w-px" />
+        <span className="ui-label">Fill</span>
         <ColorPicker
           label="fill"
           color={fillColor}
@@ -152,10 +152,10 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
           onOpacityChange={() => {}}
           onBowingChange={() => {}}
         />
-        <div className="w-px h-4 bg-black/[0.06] dark:bg-white/[0.06]" />
+        <div className="ui-div h-4 w-px" />
         {/* Stroke style */}
         <label className="flex items-center gap-1">
-          <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Style</span>
+          <span className="ui-label">Style</span>
           <select
             aria-label="Stroke style"
             value={strokeStyle}
@@ -164,7 +164,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
               setStrokeStyle(v)
               update({ strokeStyle: v })
             }}
-            className="rounded bg-transparent text-[11px] text-zinc-600 dark:text-zinc-300"
+            className="ui-select"
           >
             <option value="solid">Solid</option>
             <option value="dashed">Dashed</option>
@@ -172,7 +172,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
           </select>
         </label>
         <label className="flex items-center gap-1">
-          <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Sketch</span>
+          <span className="ui-label">Sketch</span>
           <select
             aria-label="Sketch roughness"
             value={roughness}
@@ -181,7 +181,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
               setRoughness(v)
               update({ roughness: v })
             }}
-            className="rounded bg-transparent text-[11px] text-zinc-600 dark:text-zinc-300"
+            className="ui-select"
           >
             <option value={0}>Neat</option>
             <option value={1}>Natural</option>
@@ -190,9 +190,9 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
         </label>
         {isText && (
           <>
-            <div className="w-px h-4 bg-black/[0.06] dark:bg-white/[0.06]" />
+            <div className="ui-div h-4 w-px" />
             <label className="flex items-center gap-1">
-              <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Size</span>
+              <span className="ui-label">Size</span>
               <select
                 aria-label="Font size"
                 value={fontSize}
@@ -201,7 +201,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
                   setFontSize(v)
                   update({ fontSize: v })
                 }}
-                className="rounded bg-transparent text-[11px] text-zinc-600 dark:text-zinc-300"
+                className="ui-select"
               >
                 {FONT_SIZES.map((s) => (
                   <option key={s} value={s}>{s}</option>
@@ -209,7 +209,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
               </select>
             </label>
             <label className="flex items-center gap-1">
-              <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Font</span>
+              <span className="ui-label">Font</span>
               <select
                 aria-label="Font family"
                 value={fontFamily}
@@ -217,7 +217,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
                   setFontFamily(e.target.value)
                   update({ fontFamily: e.target.value })
                 }}
-                className="rounded bg-transparent text-[11px] text-zinc-600 dark:text-zinc-300"
+                className="ui-select"
               >
                 {FONT_FAMILIES.map((f) => (
                   <option key={f} value={f}>{f}</option>
@@ -227,7 +227,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
           </>
         )}
         {selected.length > 1 && (
-          <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+          <span className="ui-faint ui-nums">
             {selected.length} selected — edits apply to all
           </span>
         )}

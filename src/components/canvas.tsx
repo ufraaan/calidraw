@@ -15,7 +15,8 @@ import { ZoomControl, zoomToFit } from './zoom-control'
 import { ContextMenu, MenuItem, MenuSeparator } from './context-menu'
 import { TextEditor } from './text-editor'
 import { Minimap } from './minimap'
-import { IconExport, IconImage } from './ui/icons'
+import { IconExport, IconImage, IconSunLight, IconMoonDark } from './ui/icons'
+import { IconButton } from './ui/icon-button'
 import { copyToClipboardAsPNG, sceneFromJSON } from '../lib/renderer'
 import { generateId, getNormalizedBounds } from '../lib/geometry'
 import type { ReactNode } from 'react'
@@ -381,7 +382,7 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [elements, selectedIds, closeCtxMenu])
 
-  // ── Copy / Paste Style state ─────────────────────────────
+  // ── Copy / Paste style state ─────────────────────────────
   const [copiedStyle, setCopiedStyle] = useState<Partial<Element> | null>(null)
 
   // ── Select all, duplicate, nudge ─────────────────────────
@@ -668,7 +669,7 @@ export function CanvasView(): ReactNode {
   const hasMultiSel = selectedIds.length > 1
   const hasThreePlus = selectedIds.length > 2
 
-  // ── Copy / Paste Style ───────────────────────────────────
+  // ── Copy / Paste style ───────────────────────────────────
   const handleCopyStyle = useCallback(() => {
     if (!selectedElement) return
     setCopiedStyle({
@@ -855,40 +856,35 @@ export function CanvasView(): ReactNode {
       )}
 
       {/* Top-left actions: export, image, theme */}
-      <div className="pointer-events-auto absolute left-4 top-4 flex items-center gap-1">
-        <button
-          type="button"
+      <div className="ui-panel pointer-events-auto absolute left-4 top-4 flex items-center gap-0.5 p-2">
+        <IconButton
           onClick={() => setShowExport(true)}
           title="Export (Ctrl+E)"
-          aria-label="Export canvas"
-          className="flex size-8 items-center justify-center rounded-md text-zinc-400 transition-all duration-100 hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] active:scale-95 dark:text-zinc-500 dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
+          ariaLabel="Export canvas"
         >
           <IconExport />
-        </button>
-        <button
-          type="button"
+        </IconButton>
+        <IconButton
           onClick={() => fileInputRef.current?.click()}
           title="Insert image"
-          aria-label="Insert image"
-          className="flex size-8 items-center justify-center rounded-md text-zinc-400 transition-all duration-100 hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] active:scale-95 dark:text-zinc-500 dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
+          ariaLabel="Insert image"
         >
           <IconImage />
-        </button>
-        <button
-          type="button"
+        </IconButton>
+        <IconButton
           onClick={() => setTheme(!isDark)}
           title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="flex size-8 items-center justify-center rounded-md text-[13px] text-zinc-400 transition-all duration-100 hover:bg-[#e8a07a]/10 hover:text-[#e8a07a] active:scale-95 dark:text-zinc-500 dark:hover:bg-[#e8a07a]/15 dark:hover:text-[#e8a07a]"
+          ariaLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          <span aria-hidden>{isDark ? '☀' : '☾'}</span>
-        </button>
+          {isDark ? <IconSunLight /> : <IconMoonDark />}
+        </IconButton>
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
           className="hidden"
           aria-hidden
+          tabIndex={-1}
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) void insertImageFile(f)
@@ -896,6 +892,18 @@ export function CanvasView(): ReactNode {
           }}
         />
       </div>
+
+      {/* Empty canvas hint — quiet invitation, never blocks input */}
+      {elements.length === 0 && !editingTextEl && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <p className="ui-faint flex items-center gap-2 text-center">
+            <span>Pick a tool and draw</span>
+            <kbd className="ui-kbd">R</kbd>
+            <kbd className="ui-kbd">O</kbd>
+            <kbd className="ui-kbd">T</kbd>
+          </p>
+        </div>
+      )}
 
       <Minimap elements={elements} />
       <Toolbar elements={elements} onElementUpdate={(el) => trackedUpserts([el], 'edit style')} onElementsUpdate={(els) => trackedUpserts(els, 'edit style')} />
@@ -916,10 +924,10 @@ export function CanvasView(): ReactNode {
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={closeCtxMenu}>
           <MenuItem onClick={flipHorizontal} disabled={!hasSelection} shortcut="⇋">
-            <FlipHIcon /> Flip Horizontal
+            <FlipHIcon /> Flip horizontal
           </MenuItem>
           <MenuItem onClick={flipVertical} disabled={!hasSelection} shortcut="⇅">
-            <FlipVIcon /> Flip Vertical
+            <FlipVIcon /> Flip vertical
           </MenuItem>
           <MenuSeparator />
 
@@ -933,7 +941,7 @@ export function CanvasView(): ReactNode {
             }}
             disabled={!hasSelection}
           >
-            <BringFrontIcon /> Bring to Front
+            <BringFrontIcon /> Bring to front
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -943,7 +951,7 @@ export function CanvasView(): ReactNode {
             }}
             disabled={!selectedElement}
           >
-            <BringForwardIcon /> Bring Forward
+            <BringForwardIcon /> Bring forward
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -953,7 +961,7 @@ export function CanvasView(): ReactNode {
             }}
             disabled={!selectedElement}
           >
-            <SendBackwardIcon /> Send Backward
+            <SendBackwardIcon /> Send backward
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -965,37 +973,37 @@ export function CanvasView(): ReactNode {
             }}
             disabled={!hasSelection}
           >
-            <SendBackIcon /> Send to Back
+            <SendBackIcon /> Send to back
           </MenuItem>
           <MenuSeparator />
 
           {/* Alignment */}
           <MenuItem onClick={alignLeft} disabled={!hasMultiSel}>
-            <AlignLeftIcon /> Align Left
+            <AlignLeftIcon /> Align left
           </MenuItem>
           <MenuItem onClick={alignCenterX} disabled={!hasMultiSel}>
-            <AlignCenterXIcon /> Align Center
+            <AlignCenterXIcon /> Align center
           </MenuItem>
           <MenuItem onClick={alignRight} disabled={!hasMultiSel}>
-            <AlignRightIcon /> Align Right
+            <AlignRightIcon /> Align right
           </MenuItem>
           <MenuItem onClick={alignTop} disabled={!hasMultiSel}>
-            <AlignTopIcon /> Align Top
+            <AlignTopIcon /> Align top
           </MenuItem>
           <MenuItem onClick={alignCenterY} disabled={!hasMultiSel}>
-            <AlignCenterYIcon /> Align Middle
+            <AlignCenterYIcon /> Align middle
           </MenuItem>
           <MenuItem onClick={alignBottom} disabled={!hasMultiSel}>
-            <AlignBottomIcon /> Align Bottom
+            <AlignBottomIcon /> Align bottom
           </MenuItem>
           <MenuSeparator />
 
           {/* Distribute */}
           <MenuItem onClick={distributeHorizontally} disabled={!hasThreePlus}>
-            <DistributeHIcon /> Distribute Horizontally
+            <DistributeHIcon /> Distribute horizontally
           </MenuItem>
           <MenuItem onClick={distributeVertically} disabled={!hasThreePlus}>
-            <DistributeVIcon /> Distribute Vertically
+            <DistributeVIcon /> Distribute vertically
           </MenuItem>
           <MenuSeparator />
 
@@ -1017,15 +1025,15 @@ export function CanvasView(): ReactNode {
           <MenuSeparator />
 
           <MenuItem onClick={handleCopyStyle} disabled={!selectedElement}>
-            <StyleIcon /> Copy Style
+            <StyleIcon /> Copy style
           </MenuItem>
           <MenuItem onClick={handlePasteStyle} disabled={!copiedStyle || !hasSelection}>
-            <PasteStyleIcon /> Paste Style
+            <PasteStyleIcon /> Paste style
           </MenuItem>
           <MenuSeparator />
 
           <MenuItem onClick={handleCopyPNG} disabled={!hasSelection}>
-            <PNGIcon /> Copy to Clipboard as PNG
+            <PNGIcon /> Copy as PNG
           </MenuItem>
         </ContextMenu>
       )}

@@ -69,8 +69,8 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
       ref={ref}
       role="menu"
       aria-label="Canvas context menu"
-      className="fixed z-50 min-w-[200px] rounded-lg border border-zinc-200 bg-white py-1 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.15)] dark:border-zinc-700 dark:bg-zinc-900"
-      style={{ left: pos.left, top: pos.top }}
+      className="ui-pop ui-enter fixed z-50 min-w-[208px] p-1.5"
+      style={{ left: pos.left, top: pos.top, transformOrigin: 'top left' }}
     >
       {children}
     </div>
@@ -90,25 +90,17 @@ export function MenuItem({ onClick, children, disabled, shortcut }: MenuItemProp
       type="button"
       role="menuitem"
       disabled={disabled}
-      className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition-colors ${
-        disabled
-          ? 'cursor-default text-zinc-300 dark:text-zinc-600'
-          : 'text-zinc-600 hover:bg-[#e8a07a]/10 active:bg-[#e8a07a]/15 dark:text-zinc-400 dark:hover:bg-[#e8a07a]/15'
-      }`}
+      className="ui-btn flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left"
       onClick={onClick}
     >
-      <span className="flex flex-1 items-center gap-2.5">{children}</span>
-      {shortcut && (
-        <kbd className="rounded border border-zinc-200 px-1 text-[10px] text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
-          {shortcut}
-        </kbd>
-      )}
+      <span className="ui-text flex flex-1 items-center gap-2.5">{children}</span>
+      {shortcut && <kbd className="ui-kbd">{shortcut}</kbd>}
     </button>
   )
 }
 
 export function MenuSeparator() {
   return (
-    <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+    <div className="ui-div my-1 h-px" />
   )
 }

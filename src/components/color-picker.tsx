@@ -5,6 +5,15 @@ const swatches = [
   '#2d2d2d', '#e8847a', '#74aed8', '#81c4a1', '#cc99c8',
 ]
 
+function cssVar(name: string, fallback: string): string {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    return v || fallback
+  } catch {
+    return fallback
+  }
+}
+
 interface ColorPickerProps {
   label: 'stroke' | 'fill'
   color: string
@@ -29,7 +38,7 @@ function StrokePreview({ width, active }: { width: number; active: boolean }) {
     const ctx = c.getContext('2d')!
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, 18, 8)
-    ctx.strokeStyle = active ? '#18181b' : '#a1a1aa'
+    ctx.strokeStyle = active ? cssVar('--accent', '#e8a07a') : cssVar('--ink-faint', '#a1a1aa')
     ctx.lineWidth = width
     ctx.lineCap = 'round'
     ctx.beginPath()
@@ -52,7 +61,7 @@ function BowingPreview({ bowing, active }: { bowing: number; active: boolean }) 
     const ctx = c.getContext('2d')!
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, 18, 10)
-    ctx.strokeStyle = active ? '#18181b' : '#a1a1aa'
+    ctx.strokeStyle = active ? cssVar('--accent', '#e8a07a') : cssVar('--ink-faint', '#a1a1aa')
     ctx.lineWidth = 1.2
     ctx.lineCap = 'round'
     ctx.beginPath()
@@ -87,32 +96,31 @@ export function ColorPicker({
         value={color === 'transparent' ? '#ffffff' : color}
         aria-label={label === 'stroke' ? 'Stroke color' : 'Fill color'}
         onChange={(e) => onColorChange(e.target.value)}
-        className="size-4 cursor-pointer rounded border border-black/[0.06] bg-transparent p-0 dark:border-white/[0.06]"
+        className="size-4 cursor-pointer rounded border border-black/10 bg-transparent p-0"
+        style={{ borderColor: 'var(--hairline)' }}
         title={label === 'stroke' ? 'Stroke color' : 'Fill color'}
       />
-      <div className="flex items-center gap-px">
+      <div className="flex items-center gap-1">
         {swatches.map((c) => (
           <button
             key={c}
             type="button"
             aria-label={c}
+            aria-pressed={color === c}
             onClick={() => onColorChange(c)}
-            className={`size-3 rounded-sm transition-transform hover:scale-110 ${
-              color === c
-                ? 'ring-1 ring-black/30 dark:ring-white/40 ring-offset-[0.5px] ring-offset-transparent'
-                : ''
-            }`}
-            style={{ backgroundColor: c }}
+            className="ui-iconbtn ui-swatch size-4 min-h-4 min-w-4"
+            style={color === c ? { outline: '2px solid var(--accent)', outlineOffset: '1px', backgroundColor: c } : { backgroundColor: c }}
           />
         ))}
         {label === 'fill' && (
           <button
             type="button"
             aria-label="No fill"
+            aria-pressed={color === 'transparent'}
             onClick={() => onColorChange('transparent')}
-            className={`flex size-3 items-center justify-center rounded-sm border border-black/[0.08] text-[6px] font-bold leading-none text-zinc-300 dark:border-white/[0.12] dark:text-zinc-600 ${
-              color === 'transparent' ? 'ring-1 ring-black/30 dark:ring-white/40 ring-offset-[0.5px]' : ''
-            }`}
+            className="ui-iconbtn ui-swatch size-4 min-h-4 min-w-4 text-[8px] font-bold leading-none"
+            style={color === 'transparent' ? { outline: '2px solid var(--accent)', outlineOffset: '1px' } : undefined}
+            title="No fill"
           >
             /
           </button>
@@ -121,18 +129,16 @@ export function ColorPicker({
       {showDetails && (
         <>
           {/* ── Stroke width (visual previews) ─────────────── */}
-          <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
-          <div className="flex items-center gap-px">
+          <div className="ui-div w-px self-stretch" />
+          <div className="flex items-center gap-0.5" role="group" aria-label="Stroke width">
             {[1, 2, 4].map((w) => (
               <button
                 key={w}
                 type="button"
                 onClick={() => onStrokeWidthChange(w)}
-                className={`flex size-5 items-center justify-center rounded-sm ${
-                  strokeWidth === w
-                    ? 'bg-black/[0.06] dark:bg-white/[0.08]'
-                    : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
-                }`}
+                aria-label={`${w} pixels`}
+                aria-pressed={strokeWidth === w}
+                className={`ui-iconbtn size-6 min-h-6 min-w-6 ${strokeWidth === w ? 'is-active' : ''}`}
                 title={`${w}px stroke`}
               >
                 <StrokePreview width={w} active={strokeWidth === w} />
@@ -141,9 +147,9 @@ export function ColorPicker({
           </div>
 
           {/* ── Opacity slider ─────────────────────────────── */}
-          <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
+          <div className="ui-div w-px self-stretch" />
           <div className="flex items-center gap-1.5">
-            <label className="sr-only" htmlFor={`opacity-${label}`}>Opacity</label>
+            <label className="ui-faint sr-only" htmlFor={`opacity-${label}`}>Opacity</label>
             <input
               id={`opacity-${label}`}
               type="range"
@@ -155,25 +161,25 @@ export function ColorPicker({
               onChange={(e) => onOpacityChange(Number(e.target.value))}
               className="
                 h-1 w-16 cursor-pointer appearance-none rounded-full
-                bg-black/[0.08] dark:bg-white/[0.1]
-                accent-zinc-700 dark:accent-zinc-300
+                bg-black/10
+                accent-[#e8a07a]
                 [&::-webkit-slider-thumb]:size-2.5
                 [&::-webkit-slider-thumb]:appearance-none
                 [&::-webkit-slider-thumb]:rounded-full
-                [&::-webkit-slider-thumb]:bg-zinc-700
+                [&::-webkit-slider-thumb]:bg-[#e8a07a]
                 [&::-webkit-slider-thumb]:shadow-[0_1px_2px_rgba(0,0,0,0.2)]
-                dark:[&::-webkit-slider-thumb]:bg-zinc-200
               "
+              style={{ background: 'var(--wash)' }}
               title={`Opacity: ${opacity}%`}
             />
-            <span className="min-w-[2ch] text-[10px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
+            <span className="ui-faint ui-nums min-w-[2ch]">
               {opacity}%
             </span>
           </div>
 
           {/* ── Bowing presets ────────────────────────────── */}
-          <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
-          <div className="flex items-center gap-px">
+          <div className="ui-div w-px self-stretch" />
+          <div className="flex items-center gap-0.5" role="group" aria-label="Bowing">
             {[
               { value: 0, label: 'off' },
               { value: 1, label: 'natural' },
@@ -184,17 +190,12 @@ export function ColorPicker({
                 key={b.value}
                 type="button"
                 onClick={() => onBowingChange(b.value)}
-                className={`flex flex-col items-center gap-[1px] rounded-sm px-1 py-0.5 text-[8px] font-medium leading-none transition-colors ${
-                  bowing === b.value
-                    ? 'bg-black/[0.06] dark:bg-white/[0.08]'
-                    : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
-                }`}
+                aria-pressed={bowing === b.value}
+                className={`ui-iconbtn flex-col gap-[1px] px-1.5 py-0.5 text-[8px] font-medium leading-none ${bowing === b.value ? 'is-active' : ''}`}
                 title={`Bowing: ${b.label}`}
               >
                 <BowingPreview bowing={b.value} active={bowing === b.value} />
-                <span className={bowing === b.value ? 'text-zinc-600 dark:text-zinc-300' : 'text-zinc-400 dark:text-zinc-500'}>
-                  {b.label}
-                </span>
+                <span className="ui-faint">{b.label}</span>
               </button>
             ))}
           </div>

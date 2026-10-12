@@ -274,22 +274,22 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
     dragging.current = false
   }, [])
 
-  const glass =
-    'bg-white/80 backdrop-blur-xl border border-black/[0.04] shadow-[0_2px_8px_-3px_rgba(0,0,0,0.08)] dark:bg-zinc-900/80 dark:border-white/[0.06] dark:shadow-[0_2px_8px_-3px_rgba(0,0,0,0.3)]'
+  const glass = 'ui-panel'
 
   return (
     <div
-      className={`pointer-events-auto absolute right-4 top-4 z-40 overflow-hidden rounded-[10px] ${glass} hidden sm:block`}
+      className={`pointer-events-auto absolute right-4 top-4 z-40 overflow-hidden ${glass} hidden sm:block`}
     >
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
         aria-label={collapsed ? 'Expand minimap' : 'Collapse minimap'}
         aria-expanded={!collapsed}
-        className="flex w-full items-center justify-between px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+        className="ui-iconbtn w-full px-2 py-1 text-[10px] font-medium"
+        style={{ justifyContent: 'space-between' }}
       >
-        <span>Minimap</span>
-        <span aria-hidden>{collapsed ? '+' : '–'}</span>
+        <span className="ui-label">Minimap</span>
+        <span aria-hidden className="ui-faint">{collapsed ? '+' : '–'}</span>
       </button>
       {!collapsed && (
         <canvas

@@ -20,12 +20,12 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
   const [format, setFormat] = useState<'png' | 'svg' | 'json'>('png')
   const [filename, setFilename] = useState('calidraw-canvas')
   const [feedback, setFeedback] = useState('')
-  const firstBtn = useRef<HTMLButtonElement>(null)
+  const firstField = useRef<HTMLInputElement>(null)
 
   const canSelectSelection = selectedIds.length > 0
 
   useEffect(() => {
-    firstBtn.current?.focus()
+    firstField.current?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -65,51 +65,39 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
     }
   }
 
-  const glass = 'bg-white/70 backdrop-blur-xl border border-black/[0.04] shadow-[0_1px_4px_-2px_rgba(0,0,0,0.08)] dark:bg-zinc-900/70 dark:border-white/[0.06] dark:shadow-[0_1px_4px_-2px_rgba(0,0,0,0.3)]'
-
-  const btn = (active: boolean, disabled = false) =>
-    `flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-100 active:scale-95 ${
-      disabled
-        ? 'cursor-default text-zinc-300 dark:text-zinc-600'
-        : active
-          ? 'bg-[#e8a07a]/10 text-[#e8a07a] dark:bg-[#e8a07a]/15 dark:text-[#e8a07a]'
-          : 'text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'
-    }`
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 dark:bg-black/50" onClick={onClose}>
+    <div className="ui-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Export canvas"
-        className={`flex flex-col gap-3 rounded-lg ${glass} px-3 py-3 w-[280px]`}
+        className="ui-pop ui-enter flex w-[300px] flex-col gap-4 p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-          Export
-        </span>
+        <span className="ui-label">Export</span>
 
         {/* Filename */}
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] text-zinc-400">Filename</span>
+        <label className="flex flex-col gap-1.5">
+          <span className="ui-faint">Filename</span>
           <input
-            ref={firstBtn as never}
+            ref={firstField}
             type="text"
             value={filename}
             aria-label="Export filename"
             onChange={(e) => setFilename(e.target.value)}
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs text-zinc-700 dark:border-white/10 dark:text-zinc-200"
+            className="ui-input ui-input-lg border"
+            style={{ borderColor: 'var(--hairline)' }}
           />
         </label>
 
         {/* Mode */}
-        <div className="flex gap-1.5">
-          <button type="button" className={btn(mode === 'all')} onClick={() => setMode('all')}>
+        <div className="flex gap-1.5" role="group" aria-label="Export scope">
+          <button type="button" className={`ui-btn flex-1 ${mode === 'all' ? 'is-active' : ''}`} onClick={() => setMode('all')}>
             Entire canvas
           </button>
           <button
             type="button"
-            className={btn(mode === 'selection', !canSelectSelection)}
+            className={`ui-btn flex-1 ${mode === 'selection' ? 'is-active' : ''}`}
             disabled={!canSelectSelection}
             onClick={() => canSelectSelection && setMode('selection')}
           >
@@ -119,9 +107,9 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
 
         {/* Scale — PNG only */}
         {format === 'png' && (
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5" role="group" aria-label="Export scale">
             {[1, 2, 3, 4].map((s) => (
-              <button key={s} type="button" className={btn(scale === s)} onClick={() => setScale(s)}>
+              <button key={s} type="button" className={`ui-btn ui-nums flex-1 ${scale === s ? 'is-active' : ''}`} onClick={() => setScale(s)}>
                 {s}×
               </button>
             ))}
@@ -129,45 +117,33 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
         )}
 
         {/* Format */}
-        <div className="flex gap-1.5">
-          <button type="button" className={btn(format === 'png')} onClick={() => setFormat('png')}>
+        <div className="flex gap-1.5" role="group" aria-label="Export format">
+          <button type="button" className={`ui-btn flex-1 ${format === 'png' ? 'is-active' : ''}`} onClick={() => setFormat('png')}>
             PNG
           </button>
-          <button type="button" className={btn(format === 'svg')} onClick={() => setFormat('svg')}>
+          <button type="button" className={`ui-btn flex-1 ${format === 'svg' ? 'is-active' : ''}`} onClick={() => setFormat('svg')}>
             SVG
           </button>
-          <button type="button" className={btn(format === 'json')} onClick={() => setFormat('json')}>
+          <button type="button" className={`ui-btn flex-1 ${format === 'json' ? 'is-active' : ''}`} onClick={() => setFormat('json')}>
             JSON
           </button>
         </div>
 
-        <div className="w-full h-px bg-black/[0.06] dark:bg-white/[0.06]" />
+        <div className="ui-div h-px w-full" />
 
         {feedback && (
-          <span className="text-[11px] text-emerald-500" role="status">{feedback}</span>
+          <span className="text-xs" style={{ color: 'var(--accent)' }} role="status">{feedback}</span>
         )}
 
         {/* Actions */}
         <div className="flex gap-1.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 dark:text-zinc-500 dark:hover:text-zinc-200"
-          >
+          <button type="button" onClick={onClose} className="ui-btn flex-1">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-all duration-100 hover:text-zinc-700 active:scale-95 dark:text-zinc-500 dark:hover:text-zinc-200"
-          >
+          <button type="button" onClick={handleCopy} className="ui-btn flex-1">
             Copy
           </button>
-          <button
-            type="button"
-            onClick={handleExport}
-            className="flex-1 rounded-md bg-[#e8a07a]/15 px-2.5 py-1.5 text-xs font-medium text-[#e8a07a] transition-all duration-100 active:scale-95"
-          >
+          <button type="button" onClick={handleExport} className="ui-btn ui-btn-primary flex-1">
             Export
           </button>
         </div>
