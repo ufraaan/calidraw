@@ -27,7 +27,7 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
   const apy = py - ay
   const dot = apx * abx + apy * aby
   const len2 = abx * abx + aby * aby
-  let t = len2 === 0 ? 0 : Math.max(0, Math.min(1, dot / len2))
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, dot / len2))
   const cx = ax + t * abx
   const cy = ay + t * aby
   const dx = px - cx

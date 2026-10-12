@@ -30,7 +30,7 @@ export interface ClipboardActions {
   exportCanvas?: () => void
 }
 
-let clipboardActions: ClipboardActions = {
+const clipboardActions: ClipboardActions = {
   copy: () => {},
   cut: () => {},
   paste: () => {},

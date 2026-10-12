@@ -59,7 +59,8 @@ function BowingPreview({ bowing, active }: { bowing: number; active: boolean }) 
     const amp = bowing * 0.6 // wave amplitude scales with bowing
     for (let x = 2; x <= 16; x += 0.5) {
       const y = 5 + Math.sin((x - 2) * 1.2) * amp
-      x === 2 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+      if (x === 2) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
     }
     ctx.stroke()
   }, [bowing, active])

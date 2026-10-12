@@ -628,8 +628,7 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
   )
 
   // ── Pointer up ────────────────────────────────────────────
-  const handlePointerUp = useCallback(
-    (_e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerUp = useCallback(() => {
       panStartRef.current = null
       if (canvasRef.current) {
         canvasRef.current.style.cursor = TOOL_CURSOR[tool] ?? 'default'
