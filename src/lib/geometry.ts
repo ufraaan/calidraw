@@ -36,9 +36,19 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
 }
 
 export function hitTest(point: Point, element: Element): boolean {
-  // Path-based elements (pencil, line) — test proximity to the drawn segments
+  // Path-based elements (pencil, line) — bbox pre-check, then proximity.
   if (element.points && element.points.length >= 2) {
-    const threshold = 12 / Math.max(1, (canvasStore?.state?.zoom ?? 1))
+    const zoom = canvasStore?.state?.zoom ?? 1
+    const threshold = 12 / Math.max(1, zoom)
+    const bounds = getElementBounds(element)
+    if (
+      point.x < bounds.minX - threshold ||
+      point.x > bounds.maxX + threshold ||
+      point.y < bounds.minY - threshold ||
+      point.y > bounds.maxY + threshold
+    ) {
+      return false
+    }
     for (let i = 1; i < element.points.length; i++) {
       const a = element.points[i - 1]
       const b = element.points[i]
