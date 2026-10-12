@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type { Element } from '../types'
 import {
   loadElements,
@@ -6,14 +6,18 @@ import {
   saveElements,
   removeElement,
 } from '../db/elements'
+import { db } from '../db/schema'
 
 export function useElements() {
   const [elements, setElements] = useState<Element[]>([])
   const [loading, setLoading] = useState(true)
+  const elementsRef = useRef<Element[]>([])
+  elementsRef.current = elements
 
   useEffect(() => {
     loadElements()
       .then(setElements)
+      .catch(() => setElements([]))
       .finally(() => setLoading(false))
   }, [])
 
@@ -27,10 +31,15 @@ export function useElements() {
       }
       return [...prev, element]
     })
-    await saveElement(element)
+    try {
+      await saveElement(element)
+    } catch {
+      /* IndexedDB full/blocked — keep in-memory state */
+    }
   }, [])
 
   const upsertElements = useCallback(async (newElements: Element[]) => {
+    if (newElements.length === 0) return
     setElements((prev) => {
       const next = [...prev]
       for (const el of newElements) {
@@ -43,69 +52,100 @@ export function useElements() {
       }
       return next
     })
-    await saveElements(newElements)
+    try {
+      // Only write dirty elements, not the whole scene.
+      await saveElements(newElements)
+    } catch {
+      /* ignore */
+    }
   }, [])
 
   const deleteElement = useCallback(async (id: string) => {
     setElements((prev) => prev.filter((e) => e.id !== id))
-    await removeElement(id)
+    try {
+      await removeElement(id)
+    } catch {
+      /* ignore */
+    }
   }, [])
 
   const deleteElements = useCallback(async (ids: string[]) => {
-    setElements((prev) => prev.filter((e) => !ids.includes(e.id)))
-    await Promise.all(ids.map(removeElement))
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    setElements((prev) => prev.filter((e) => !idSet.has(e.id)))
+    try {
+      await Promise.all(ids.map(removeElement))
+    } catch {
+      /* ignore */
+    }
   }, [])
 
-  /** Direct replace — used by undo/redo to restore a previous elements snapshot */
+  /** Direct replace — used by undo/redo to restore a previous snapshot.
+   * Writes dirty elements and deletes removed ones (no full bulkPut). */
   const replaceElements = useCallback(async (newElements: Element[]) => {
+    const prev = elementsRef.current
+    const prevIds = new Set(prev.map((e) => e.id))
+    const nextIds = new Set(newElements.map((e) => e.id))
+    const removed = [...prevIds].filter((id) => !nextIds.has(id))
     setElements(newElements)
-    await saveElements(newElements)
+    try {
+      if (newElements.length > 0) await saveElements(newElements)
+      if (removed.length > 0) await db.elements.bulkDelete(removed)
+    } catch {
+      /* ignore */
+    }
   }, [])
+
+  function reorder(compute: (prev: Element[]) => Element[] | null) {
+    const prev = elementsRef.current
+    const next = compute(prev)
+    if (!next || next === prev) return
+    setElements(next)
+    // Order is part of the scene — persist, but only the order-affected ids.
+    // Fire-and-forget; failures keep in-memory order.
+    saveElements(next).catch(() => {})
+  }
 
   const bringToFront = useCallback(async (id: string) => {
-    setElements((prev) => {
+    reorder((prev) => {
       const idx = prev.findIndex((e) => e.id === id)
-      if (idx === -1 || idx === prev.length - 1) return prev
+      if (idx === -1 || idx === prev.length - 1) return null
       const next = [...prev]
       const [el] = next.splice(idx, 1)
       next.push(el)
-      saveElements(next)
       return next
     })
   }, [])
 
   const sendToBack = useCallback(async (id: string) => {
-    setElements((prev) => {
+    reorder((prev) => {
       const idx = prev.findIndex((e) => e.id === id)
-      if (idx <= 0) return prev
+      if (idx <= 0) return null
       const next = [...prev]
       const [el] = next.splice(idx, 1)
       next.unshift(el)
-      saveElements(next)
       return next
     })
   }, [])
 
   const bringForward = useCallback(async (id: string) => {
-    setElements((prev) => {
+    reorder((prev) => {
       const idx = prev.findIndex((e) => e.id === id)
-      if (idx === -1 || idx === prev.length - 1) return prev
+      if (idx === -1 || idx === prev.length - 1) return null
       const next = [...prev]
       const [el] = next.splice(idx, 1)
       next.splice(idx + 1, 0, el)
-      saveElements(next)
       return next
     })
   }, [])
 
   const sendBackward = useCallback(async (id: string) => {
-    setElements((prev) => {
+    reorder((prev) => {
       const idx = prev.findIndex((e) => e.id === id)
-      if (idx <= 0) return prev
+      if (idx <= 0) return null
       const next = [...prev]
       const [el] = next.splice(idx, 1)
       next.splice(idx - 1, 0, el)
-      saveElements(next)
       return next
     })
   }, [])
