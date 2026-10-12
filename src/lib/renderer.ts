@@ -2,17 +2,43 @@ import rough from 'roughjs'
 import type { RoughCanvas } from 'roughjs/bin/canvas'
 import type { Element, Point } from '../types'
 
-// ── Image cache ─────────────────────────────────────────────
+// ── Image cache (LRU, capped) ─────────────────────────────────
 const imageCache = new Map<string, HTMLImageElement>()
+const MAX_IMAGES = 50
 
 function getOrCreateImage(dataUrl: string): HTMLImageElement {
   let img = imageCache.get(dataUrl)
-  if (!img) {
-    img = new Image()
-    img.src = dataUrl
+  if (img) {
+    // Refresh LRU order
+    imageCache.delete(dataUrl)
     imageCache.set(dataUrl, img)
+    return img
+  }
+  img = new Image()
+  img.src = dataUrl
+  imageCache.set(dataUrl, img)
+  if (imageCache.size > MAX_IMAGES) {
+    const oldest = imageCache.keys().next().value
+    if (oldest) imageCache.delete(oldest)
   }
   return img
+}
+
+export function clearImageCache() {
+  imageCache.clear()
+}
+
+// ── Rough.js per-canvas cache ────────────────────────────────
+// rough.canvas() wrapper creation is cheap-ish but we cache per canvas
+// to avoid re-instantiation every frame.
+const roughCache = new WeakMap<HTMLCanvasElement, RoughCanvas>()
+function getRoughCanvas(canvas: HTMLCanvasElement): RoughCanvas {
+  let rc = roughCache.get(canvas)
+  if (!rc) {
+    rc = rough.canvas(canvas)
+    roughCache.set(canvas, rc)
+  }
+  return rc
 }
 
 // ── Brand accent ─────────────────────────────────────────────
@@ -139,14 +165,15 @@ function renderText(ctx: CanvasRenderingContext2D, el: Element) {
 }
 
 /** Measure a block of text (multi-line) and return its pixel dimensions. */
+let measureCanvas: HTMLCanvasElement | null = null
 export function measureTextBlock(
   text: string,
   fontSize: number,
   fontFamily: string,
   lineHeight: number,
 ): { width: number; height: number } {
-  const c = document.createElement('canvas')
-  const ctx = c.getContext('2d')!
+  if (!measureCanvas) measureCanvas = document.createElement('canvas')
+  const ctx = measureCanvas.getContext('2d')!
   ctx.font = `${fontSize}px ${fontFamily}`
   const lines = text.split('\n')
   let maxW = 0
@@ -183,10 +210,42 @@ export function renderScene(
   zoom = 1,
 ) {
   const canvas = ctx.canvas
+  // Clear in device pixels regardless of the caller's transform.
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  const rc = rough.canvas(canvas)
+  ctx.restore()
+
+  const rc = getRoughCanvas(canvas)
+
+  // Viewport culling: visible world rect from the current transform.
+  // Our global transform is translate(offset) + scale(zoom) composed
+  // with a DPR base — all axis-aligned, so inverse is trivial.
+  let vx0 = -Infinity, vy0 = -Infinity, vx1 = Infinity, vy1 = Infinity
+  try {
+    const t = ctx.getTransform()
+    if (t.a !== 0 && t.d !== 0) {
+      vx0 = (0 - t.e) / t.a
+      vy0 = (0 - t.f) / t.d
+      vx1 = (canvas.width - t.e) / t.a
+      vy1 = (canvas.height - t.f) / t.d
+    }
+  } catch {
+    /* getTransform unsupported — draw everything */
+  }
+  const cullPad = 40
 
   for (const el of elements) {
+    // Cull axis-aligned elements outside the viewport (rotated kept).
+    if (el.angle === 0 && vx0 !== -Infinity) {
+      const ex = el.width >= 0 ? el.x : el.x + el.width
+      const ey = el.height >= 0 ? el.y : el.y + el.height
+      const ew = Math.abs(el.width)
+      const eh = Math.abs(el.height)
+      if (ex + ew < vx0 - cullPad || ex > vx1 + cullPad || ey + eh < vy0 - cullPad || ey > vy1 + cullPad) {
+        continue
+      }
+    }
     ctx.save()
     ctx.globalAlpha = el.opacity / 100
 
@@ -575,4 +634,41 @@ export function downloadAsSVG(elements: Element[], ids: string[], filename: stri
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// ── Scene JSON export / import ──────────────────────────────
+export function sceneToJSON(elements: Element[]): string {
+  return JSON.stringify({ type: 'calidraw-scene', version: 1, elements }, null, 2)
+}
+
+export function sceneFromJSON(raw: string): Element[] | null {
+  try {
+    const parsed = JSON.parse(raw)
+    const arr: unknown = Array.isArray(parsed) ? parsed : parsed.elements
+    if (!Array.isArray(arr)) return null
+    // Minimal validation — must have id + type.
+    const els = arr.filter(
+      (e): e is Element =>
+        !!e && typeof (e as Element).id === 'string' && typeof (e as Element).type === 'string',
+    )
+    return els
+  } catch {
+    return null
+  }
+}
+
+export function downloadSceneJSON(elements: Element[], filename: string) {
+  const blob = new Blob([sceneToJSON(elements)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function copyToClipboardAsSVG(elements: Element[], ids: string[]) {
+  const svgStr = renderToSVGString(elements, ids)
+  if (!svgStr) return
+  await navigator.clipboard.writeText(svgStr)
 }
