@@ -22,18 +22,10 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
   const zoom = useSelector(canvasStore, (s) => s.zoom)
   const offsetX = useSelector(canvasStore, (s) => s.offsetX)
   const offsetY = useSelector(canvasStore, (s) => s.offsetY)
+  const isDark = useSelector(canvasStore, (s) => s.isDark)
   const dragging = useRef(false)
-
-  // ── Detect dark mode ─────────────────────────────────────────
-  const [isDark, setIsDark] = useState(
-    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
+  const rafRef = useRef(0)
+  const [collapsed, setCollapsed] = useState(false)
 
   // ── World bounds ─────────────────────────────────────────
   const world = useMemo(() => {
@@ -216,7 +208,10 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
   }, [elements, zoom, offsetX, offsetY, world, isDark])
 
   useEffect(() => {
-    draw()
+    // rAF-throttle: pan fires per-pixel, minimap redraw is O(n).
+    cancelAnimationFrame(rafRef.current)
+    rafRef.current = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(rafRef.current)
   }, [draw])
 
   // ── Click / drag to navigate ────────────────────────────
@@ -270,16 +265,29 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
 
   return (
     <div
-      className={`pointer-events-auto absolute right-4 top-4 z-40 overflow-hidden rounded-[10px] ${glass}`}
+      className={`pointer-events-auto absolute right-4 top-4 z-40 overflow-hidden rounded-[10px] ${glass} hidden sm:block`}
     >
-      <canvas
-        ref={canvasRef}
-        className="block cursor-pointer"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-      />
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-label={collapsed ? 'Expand minimap' : 'Collapse minimap'}
+        aria-expanded={!collapsed}
+        className="flex w-full items-center justify-between px-2 py-1 text-[10px] font-medium text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+      >
+        <span>Minimap</span>
+        <span aria-hidden>{collapsed ? '+' : '–'}</span>
+      </button>
+      {!collapsed && (
+        <canvas
+          ref={canvasRef}
+          className="block cursor-pointer"
+          aria-label="Minimap preview. Drag to navigate the canvas."
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+        />
+      )}
     </div>
   )
 }

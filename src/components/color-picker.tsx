@@ -84,6 +84,7 @@ export function ColorPicker({
       <input
         type="color"
         value={color === 'transparent' ? '#ffffff' : color}
+        aria-label={label === 'stroke' ? 'Stroke color' : 'Fill color'}
         onChange={(e) => onColorChange(e.target.value)}
         className="size-4 cursor-pointer rounded border border-black/[0.06] bg-transparent p-0 dark:border-white/[0.06]"
         title={label === 'stroke' ? 'Stroke color' : 'Fill color'}
@@ -141,12 +142,15 @@ export function ColorPicker({
           {/* ── Opacity slider ─────────────────────────────── */}
           <div className="w-px self-stretch bg-black/[0.06] dark:bg-white/[0.06]" />
           <div className="flex items-center gap-1.5">
+            <label className="sr-only" htmlFor={`opacity-${label}`}>Opacity</label>
             <input
+              id={`opacity-${label}`}
               type="range"
               min={5}
               max={100}
               step={1}
               value={opacity}
+              aria-label="Opacity"
               onChange={(e) => onOpacityChange(Number(e.target.value))}
               className="
                 h-1 w-16 cursor-pointer appearance-none rounded-full

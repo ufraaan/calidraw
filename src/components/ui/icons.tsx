@@ -1,4 +1,4 @@
-import { IconPointer, IconSquareRounded, IconDiamonds, IconOval, IconArrowUpRight, IconLine as TbLine, IconPencil as TbPencil, IconTypography, IconHandMove, IconTarget } from '@tabler/icons-react'
+import { IconPointer, IconSquareRounded, IconDiamonds, IconOval, IconArrowUpRight, IconLine as TbLine, IconPencil as TbPencil, IconTypography, IconHandMove, IconTarget, IconDownload, IconPhotoPlus } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 
 const p = { size: 18, stroke: 1.5 }
@@ -13,3 +13,5 @@ export function IconPencil(): ReactNode { return <TbPencil {...p} /> }
 export function IconText(): ReactNode { return <IconTypography {...p} /> }
 export function IconPan(): ReactNode { return <IconHandMove {...p} /> }
 export function IconLaser(): ReactNode { return <IconTarget {...p} /> }
+export function IconExport(): ReactNode { return <IconDownload {...p} /> }
+export function IconImage(): ReactNode { return <IconPhotoPlus {...p} /> }
