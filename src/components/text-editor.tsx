@@ -3,6 +3,12 @@ import { canvasStore } from '../stores/canvas-store'
 import type { Element } from '../types'
 import type { ReactNode } from 'react'
 
+let measureCanvas: HTMLCanvasElement | null = null
+function getMeasureCtx(): CanvasRenderingContext2D {
+  if (!measureCanvas) measureCanvas = document.createElement('canvas')
+  return measureCanvas.getContext('2d')!
+}
+
 interface TextEditorProps {
   element: Element
   onSave: (id: string, text: string, width: number, height: number) => void
@@ -34,7 +40,7 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
   const commit = useCallback(() => {
     if (value.trim()) {
       // Compute the dimensions from the text content.
-      // We use a temporary canvas to measure the text so the element
+      // We use a shared offscreen canvas to measure so the element
       // bounding box matches what the renderer will draw.
       const s = canvasStore.state
       const fontSize = (element.fontSize ?? 20) * s.zoom
@@ -42,8 +48,7 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
       const lines = value.split('\n')
       const lineHeight = fontSize * 1.2
       let maxW = 20
-      const c = document.createElement('canvas')
-      const ctx = c.getContext('2d')!
+      const ctx = getMeasureCtx()
       ctx.font = font
       for (const line of lines) {
         const m = ctx.measureText(line)
@@ -57,18 +62,17 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
   }, [value, element, onSave, onCancel])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    e.stopPropagation()
     if (e.key === 'Escape') {
       e.preventDefault()
       onCancel()
       return
     }
-    // Enter (without Shift) → save & exit
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Cmd/Ctrl+Enter → save & exit. Plain Enter inserts a newline.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
-      // We need to call commit synchronously so the blur doesn't also fire
       commit()
     }
-    // Shift+Enter → let the browser insert a newline (default behavior)
   }, [commit, onCancel])
 
   const s = canvasStore.state
@@ -80,8 +84,10 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
+      onKeyUp={(e) => e.stopPropagation()}
       onBlur={commit}
-      className="absolute overflow-hidden border-0 bg-transparent p-0 outline-none"
+      aria-label="Text element editor. Press Control Enter to save, Escape to cancel."
+      className="absolute overflow-hidden border-0 p-0 outline-none dark:bg-white/[0.06]"
       style={{
         left: element.x * s.zoom + s.offsetX,
         top: element.y * s.zoom + s.offsetY,
@@ -98,8 +104,7 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
         outline: '1px dashed rgba(232,160,122,0.5)',
         outlineOffset: 0,
         resize: 'none',
-        // Slight transparent background to distinguish from canvas
-        background: 'rgba(255,255,255,0.04)',
+        background: 'rgba(127,127,127,0.08)',
       }}
       rows={1}
       spellCheck={false}
