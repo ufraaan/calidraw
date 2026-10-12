@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useSelector } from '@tanstack/react-store'
 import { canvasStore, animateZoom, setOffset } from '../stores/canvas-store'
 import { getNormalizedBounds } from '../lib/geometry'
@@ -29,7 +30,7 @@ export function zoomToFit(elements: Element[]) {
   animateZoom(zoom, window.innerWidth / 2, window.innerHeight / 2)
 }
 
-export function ZoomControl({ elements }: { elements: Element[] }): ReactNode {
+export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: { onFit: () => void; onFitSelection: () => void }): ReactNode {
   const zoom = useSelector(canvasStore, (s) => s.zoom)
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
   const saveStatus = useSelector(canvasStore, (s) => s.saveStatus)
@@ -37,11 +38,6 @@ export function ZoomControl({ elements }: { elements: Element[] }): ReactNode {
 
   const glass =
     'bg-white/70 backdrop-blur-xl border border-black/[0.04] shadow-[0_1px_4px_-2px_rgba(0,0,0,0.08)] dark:bg-zinc-900/70 dark:border-white/[0.06] dark:shadow-[0_1px_4px_-2px_rgba(0,0,0,0.3)]'
-
-  const zoomSelection = () => {
-    const sel = elements.filter((e) => selectedIds.includes(e.id))
-    if (sel.length > 0) zoomToFit(sel)
-  }
 
   return (
     <div className={`pointer-events-auto absolute bottom-6 right-6 flex items-center rounded-lg ${glass} px-3 py-1.5 gap-2`}>
@@ -125,7 +121,7 @@ export function ZoomControl({ elements }: { elements: Element[] }): ReactNode {
       <button
         type="button"
         title="Zoom to fit (Shift+1)"
-        onClick={() => zoomToFit(elements)}
+        onClick={onFit}
         className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#e8a07a] dark:hover:text-[#e8a07a]"
       >
         Fit
@@ -134,7 +130,7 @@ export function ZoomControl({ elements }: { elements: Element[] }): ReactNode {
         <button
           type="button"
           title="Zoom to selection (Shift+2)"
-          onClick={zoomSelection}
+          onClick={onFitSelection}
           className="text-[11px] font-medium text-zinc-400 transition-colors hover:text-[#e8a07a] dark:hover:text-[#e8a07a]"
         >
           Sel
@@ -152,4 +148,4 @@ export function ZoomControl({ elements }: { elements: Element[] }): ReactNode {
       </button>
     </div>
   )
-}
+})

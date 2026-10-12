@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useSelector } from '@tanstack/react-store'
 import {
   canvasStore,
@@ -51,7 +52,7 @@ interface ToolbarProps {
   onElementsUpdate: (elements: Element[]) => void
 }
 
-export function Toolbar({ elements, onElementUpdate, onElementsUpdate }: ToolbarProps): ReactNode {
+export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElementsUpdate }: ToolbarProps): ReactNode {
   const activeTool = useSelector(canvasStore, (s) => s.tool)
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
   const storeStroke = useSelector(canvasStore, (s) => s.strokeColor)
@@ -233,4 +234,4 @@ export function Toolbar({ elements, onElementUpdate, onElementsUpdate }: Toolbar
       </div>
     </>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
+import { useRef, useEffect, useCallback, useMemo, useState, memo } from 'react'
 import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setOffset } from '../stores/canvas-store'
 import { getNormalizedBounds } from '../lib/geometry'
@@ -17,7 +17,7 @@ function strokeWidth(minimapScale: number, elementStroke: number): number {
   return Math.max(0.35, Math.min(1, elementStroke * minimapScale * 1.2))
 }
 
-export function Minimap({ elements }: MinimapProps): ReactNode {
+export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const zoom = useSelector(canvasStore, (s) => s.zoom)
   const offsetX = useSelector(canvasStore, (s) => s.offsetX)
@@ -25,6 +25,7 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
   const isDark = useSelector(canvasStore, (s) => s.isDark)
   const dragging = useRef(false)
   const rafRef = useRef(0)
+  const lastDrawRef = useRef(0)
   const [collapsed, setCollapsed] = useState(false)
 
   // ── World bounds ─────────────────────────────────────────
@@ -208,9 +209,22 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
   }, [elements, zoom, offsetX, offsetY, world, isDark])
 
   useEffect(() => {
-    // rAF-throttle: pan fires per-pixel, minimap redraw is O(n).
+    // Throttle: pan fires per-pixel and redraw is O(n) — cap at ~15fps
+    // with a trailing draw so the final position always renders.
+    const now = performance.now()
+    const elapsed = now - lastDrawRef.current
     cancelAnimationFrame(rafRef.current)
-    rafRef.current = requestAnimationFrame(draw)
+    if (elapsed >= 66) {
+      lastDrawRef.current = now
+      rafRef.current = requestAnimationFrame(draw)
+    } else {
+      const wait = 66 - elapsed
+      const timer = setTimeout(() => {
+        lastDrawRef.current = performance.now()
+        rafRef.current = requestAnimationFrame(draw)
+      }, wait)
+      return () => clearTimeout(timer)
+    }
     return () => cancelAnimationFrame(rafRef.current)
   }, [draw])
 
@@ -290,4 +304,4 @@ export function Minimap({ elements }: MinimapProps): ReactNode {
       )}
     </div>
   )
-}
+})
