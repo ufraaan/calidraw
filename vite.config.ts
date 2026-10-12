@@ -9,4 +9,14 @@ export default defineConfig({
     tailwindcss(),
     react(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          rough: ['roughjs'],
+          vendor: ['react', 'react-dom', '@tanstack/react-store', '@tanstack/react-router'],
+        },
+      },
+    },
+  },
 })
