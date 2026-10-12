@@ -9,6 +9,7 @@ import {
   copyToClipboard as copyToInternalClipboard,
 } from '../hooks/use-keyboard'
 import { useCanvas } from '../hooks/use-canvas'
+import { saveElements as persistElements } from '../db/elements'
 import { Toolbar } from './toolbar'
 import { ZoomControl, zoomToFit } from './zoom-control'
 import { ContextMenu, MenuItem, MenuSeparator } from './context-menu'
@@ -68,54 +69,117 @@ function fileToImageElement(file: File): Promise<Element | null> {
 export function CanvasView(): ReactNode {
   const {
     elements,
-    upsertElement,
     upsertElements,
     deleteElements,
-    bringToFront,
-    sendToBack,
-    bringForward,
-    sendBackward,
+    setElements,
     replaceElements,
   } = useElements()
 
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
   useKeyboard()
 
-  // ── Undo / Redo (capped; full snapshots, images excluded from cap pressure) ──
-  const [undoStack, setUndoStack] = useState<Element[][]>([])
-  const [redoStack, setRedoStack] = useState<Element[][]>([])
+  // ── Undo / Redo (delta-based: each op records only affected ids) ──
+  interface HistoryOp {
+    label: string
+    undo: () => void
+    redo: () => void
+  }
+  const [undoStack, setUndoStack] = useState<HistoryOp[]>([])
+  const [redoStack, setRedoStack] = useState<HistoryOp[]>([])
   const elementsRef = useRef(elements)
   elementsRef.current = elements
+  const undoStackRef = useRef(undoStack)
+  undoStackRef.current = undoStack
+  const redoStackRef = useRef(redoStack)
+  redoStackRef.current = redoStack
 
-  const pushUndo = useCallback(() => {
-    setUndoStack((prev) => {
-      const maxLen = 30
-      const next = [...prev, elementsRef.current]
-      return next.length > maxLen ? next.slice(next.length - maxLen) : next
-    })
+  const pushOp = useCallback((op: HistoryOp) => {
+    setUndoStack((prev) => [...prev.slice(-29), op])
     setRedoStack([])
   }, [])
 
   const handleUndo = useCallback(() => {
-    if (undoStack.length === 0) return
-    const prev = undoStack[undoStack.length - 1]
-    setRedoStack((r) => [...r, elementsRef.current])
+    const op = undoStackRef.current[undoStackRef.current.length - 1]
+    if (!op) return
+    op.undo()
     setUndoStack((u) => u.slice(0, -1))
-    replaceElements(prev)
-    // Re-select whatever was selected
-    const newIds = prev.filter((e) => selectedIds.includes(e.id)).map((e) => e.id)
-    setSelectedIds(newIds)
-  }, [undoStack, replaceElements, selectedIds])
+    setRedoStack((r) => [...r, op])
+  }, [])
 
   const handleRedo = useCallback(() => {
-    if (redoStack.length === 0) return
-    const next = redoStack[redoStack.length - 1]
-    setUndoStack((u) => [...u, elementsRef.current])
+    const op = redoStackRef.current[redoStackRef.current.length - 1]
+    if (!op) return
+    op.redo()
     setRedoStack((r) => r.slice(0, -1))
-    replaceElements(next)
-    const newIds = next.filter((e) => selectedIds.includes(e.id)).map((e) => e.id)
-    setSelectedIds(newIds)
-  }, [redoStack, replaceElements, selectedIds])
+    setUndoStack((u) => [...u.slice(-29), op])
+  }, [])
+
+  // ── Tracked mutations (record delta inverses, apply without re-recording) ──
+  const trackedUpserts = useCallback((afters: Element[], label: string) => {
+    if (afters.length === 0) return
+    const beforeMap = new Map<string, Element | undefined>()
+    for (const a of afters) {
+      beforeMap.set(a.id, elementsRef.current.find((e) => e.id === a.id))
+    }
+    const afterIds = afters.map((a) => a.id)
+    pushOp({
+      label,
+      undo: () => {
+        const restores: Element[] = []
+        const added: string[] = []
+        for (const [id, prev] of beforeMap) {
+          if (prev) restores.push(prev)
+          else added.push(id)
+        }
+        if (restores.length > 0) void upsertElements(restores)
+        if (added.length > 0) void deleteElements(added)
+        setSelectedIds(afterIds.filter((id) => beforeMap.get(id) !== undefined))
+      },
+      redo: () => {
+        void upsertElements(afters)
+        setSelectedIds(afterIds)
+      },
+    })
+    void upsertElements(afters)
+    setSelectedIds(afterIds)
+  }, [pushOp, upsertElements, deleteElements])
+
+  const trackedDeletes = useCallback((ids: string[], label: string) => {
+    if (ids.length === 0) return
+    const before = elementsRef.current.filter((e) => ids.includes(e.id))
+    pushOp({
+      label,
+      undo: () => {
+        void upsertElements(before)
+        setSelectedIds(before.map((e) => e.id))
+      },
+      redo: () => {
+        void deleteElements(ids)
+        setSelectedIds([])
+      },
+    })
+    void deleteElements(ids)
+    setSelectedIds([])
+  }, [pushOp, upsertElements, deleteElements])
+
+  const trackedReorder = useCallback((compute: (prev: Element[]) => Element[] | null, label: string) => {
+    const before = elementsRef.current
+    const after = compute(before)
+    if (!after || after === before) return
+    pushOp({
+      label,
+      undo: () => {
+        setElements(before)
+        persistElements(before).catch(() => {})
+      },
+      redo: () => {
+        setElements(after)
+        persistElements(after).catch(() => {})
+      },
+    })
+    setElements(after)
+    persistElements(after).catch(() => {})
+  }, [pushOp, setElements])
 
   // ── Context menu state ────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{
@@ -134,12 +198,11 @@ export function CanvasView(): ReactNode {
     (id: string, text: string, width: number, height: number) => {
       const el = elements.find((e) => e.id === id)
       if (el) {
-        pushUndo()
-        upsertElement({ ...el, text, width, height })
+        trackedUpserts([{ ...el, text, width, height }], 'edit text')
       }
       setEditingTextId(null)
     },
-    [elements, upsertElement, pushUndo],
+    [elements, trackedUpserts],
   )
 
   const handleTextCancel = useCallback(() => {
@@ -154,16 +217,14 @@ export function CanvasView(): ReactNode {
       elements,
       editingTextId,
       onElementCreate: (el) => {
-        pushUndo()
-        upsertElement(el)
+        trackedUpserts([el], 'create element')
         // Auto-enter text editing when a text element is created
         if (el.type === 'text') {
           setEditingTextId(el.id)
         }
       },
       onElementsUpdate: (els) => {
-        pushUndo()
-        upsertElements(els)
+        trackedUpserts(els, 'update elements')
       },
     })
 
@@ -272,11 +333,9 @@ export function CanvasView(): ReactNode {
     if (selectedIds.length === 0) return
     const sel = elements.filter((e) => selectedIds.includes(e.id))
     copyToInternalClipboard(sel)
-    pushUndo()
-    deleteElements(selectedIds)
-    setSelectedIds([])
+    trackedDeletes(selectedIds, 'cut')
     closeCtxMenu()
-  }, [elements, selectedIds, deleteElements, closeCtxMenu, pushUndo])
+  }, [elements, selectedIds, trackedDeletes, closeCtxMenu])
 
   const handlePaste = useCallback(() => {
     if (clipboardElements.length === 0) return
@@ -290,26 +349,20 @@ export function CanvasView(): ReactNode {
       x: el.x + cx - 50 + i * 20,
       y: el.y + cy - 50 + i * 20,
     }))
-    pushUndo()
-    upsertElements(pasted)
-    setSelectedIds(pasted.map((e) => e.id))
+    trackedUpserts(pasted, 'paste')
     closeCtxMenu()
-  }, [closeCtxMenu, upsertElements, pushUndo])
+  }, [closeCtxMenu, trackedUpserts])
 
   const handleDelete = useCallback(() => {
     if (selectedIds.length === 0) return
-    pushUndo()
-    deleteElements(selectedIds)
-    setSelectedIds([])
+    trackedDeletes(selectedIds, 'delete')
     closeCtxMenu()
-  }, [selectedIds, deleteElements, closeCtxMenu, pushUndo])
+  }, [selectedIds, trackedDeletes, closeCtxMenu])
 
   const handleDeleteSelected = useCallback(() => {
     if (selectedIds.length === 0) return
-    pushUndo()
-    deleteElements(selectedIds)
-    setSelectedIds([])
-  }, [selectedIds, deleteElements, pushUndo])
+    trackedDeletes(selectedIds, 'delete')
+  }, [selectedIds, trackedDeletes])
 
   const handleCopyPNG = useCallback(async () => {
     if (selectedIds.length === 0) return
@@ -327,7 +380,6 @@ export function CanvasView(): ReactNode {
 
   const handleDuplicate = useCallback(() => {
     if (selectedIds.length === 0) return
-    pushUndo()
     const dups = elements
       .filter((e) => selectedIds.includes(e.id))
       .map((e) => ({
@@ -336,30 +388,29 @@ export function CanvasView(): ReactNode {
         x: e.x + 20,
         y: e.y + 20,
       }))
-    upsertElements(dups)
-    setSelectedIds(dups.map((e) => e.id))
-  }, [elements, selectedIds, upsertElements, pushUndo])
+    trackedUpserts(dups, 'duplicate')
+  }, [elements, selectedIds, trackedUpserts])
 
   const handleNudge = useCallback(
     (dx: number, dy: number) => {
       if (selectedIds.length === 0) return
-      pushUndo()
       const nudged = elements
         .filter((e) => selectedIds.includes(e.id))
         .map((e) => ({ ...e, x: e.x + dx, y: e.y + dy }))
-      upsertElements(nudged)
+      trackedUpserts(nudged, 'nudge')
     },
-    [elements, selectedIds, upsertElements, pushUndo],
+    [elements, selectedIds, trackedUpserts],
   )
 
   const handleZoomFit = useCallback(() => {
-    zoomToFit(elements)
-  }, [elements])
+    zoomToFit(elementsRef.current)
+  }, [])
 
   const handleZoomSelection = useCallback(() => {
-    const sel = elements.filter((e) => selectedIds.includes(e.id))
+    const s = canvasStore.state
+    const sel = elementsRef.current.filter((e) => s.selectedIds.includes(e.id))
     if (sel.length > 0) zoomToFit(sel)
-  }, [elements, selectedIds])
+  }, [])
 
   const handleOpenExport = useCallback(() => {
     setShowExport(true)
@@ -400,10 +451,8 @@ export function CanvasView(): ReactNode {
   const insertImageFile = useCallback(async (file: File) => {
     const el = await fileToImageElement(file)
     if (!el) return
-    pushUndo()
-    upsertElement(el)
-    setSelectedIds([el.id])
-  }, [upsertElement, pushUndo])
+    trackedUpserts([el], 'insert image')
+  }, [trackedUpserts])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -429,17 +478,15 @@ export function CanvasView(): ReactNode {
         const els = sceneFromJSON(text)
         if (els && els.length > 0) {
           e.preventDefault()
-          pushUndo()
           const fresh = els.map((el) => ({ ...el, id: generateId() }))
-          upsertElements(fresh)
-          setSelectedIds(fresh.map((x) => x.id))
+          trackedUpserts(fresh, 'import scene')
         }
       }
     }
 
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
-  }, [insertImageFile, upsertElements, pushUndo])
+  }, [insertImageFile, trackedUpserts])
 
   // ── Save status tracking ──────────────────────────────────
   useEffect(() => {
@@ -459,7 +506,6 @@ export function CanvasView(): ReactNode {
 
   const flipHorizontal = useCallback(() => {
     if (selectedIds.length === 0) return
-    pushUndo()
     if (selectedElement) {
       const el = selectedElement
       const cx = el.x + el.width / 2
@@ -474,7 +520,7 @@ export function CanvasView(): ReactNode {
           y: pt.y,
         }))
       }
-      upsertElement(newEl)
+      trackedUpserts([newEl], 'flip horizontal')
     } else {
       // Multi-select: mirror around collective center.
       const sel = elements.filter((e) => selectedIds.includes(e.id))
@@ -485,7 +531,7 @@ export function CanvasView(): ReactNode {
         if (b.x + b.w > maxX) maxX = b.x + b.w
       }
       const cx = (minX + maxX) / 2
-      upsertElements(sel.map((el) => {
+      trackedUpserts(sel.map((el) => {
         const b = getNormalizedBounds(el)
         const nx = cx + (cx - (b.x + b.w)) // mirrored left edge
         const base = { ...el, x: nx, width: Math.abs(el.width) as number }
@@ -493,14 +539,13 @@ export function CanvasView(): ReactNode {
           base.points = base.points.map((pt) => ({ x: cx + (cx - pt.x), y: pt.y }))
         }
         return base
-      }))
+      }), 'flip horizontal')
     }
     closeCtxMenu()
-  }, [selectedElement, elements, selectedIds, upsertElement, upsertElements, closeCtxMenu, pushUndo])
+  }, [selectedElement, elements, selectedIds, trackedUpserts, closeCtxMenu])
 
   const flipVertical = useCallback(() => {
     if (selectedIds.length === 0) return
-    pushUndo()
     if (selectedElement) {
       const el = selectedElement
       const cy = el.y + el.height / 2
@@ -515,7 +560,7 @@ export function CanvasView(): ReactNode {
           y: cy + (cy - pt.y),
         }))
       }
-      upsertElement(newEl)
+      trackedUpserts([newEl], 'flip vertical')
     } else {
       const sel = elements.filter((e) => selectedIds.includes(e.id))
       let minY = Infinity, maxY = -Infinity
@@ -525,7 +570,7 @@ export function CanvasView(): ReactNode {
         if (b.y + b.h > maxY) maxY = b.y + b.h
       }
       const cy = (minY + maxY) / 2
-      upsertElements(sel.map((el) => {
+      trackedUpserts(sel.map((el) => {
         const b = getNormalizedBounds(el)
         const ny = cy + (cy - (b.y + b.h))
         const base = { ...el, y: ny, height: Math.abs(el.height) as number }
@@ -533,31 +578,80 @@ export function CanvasView(): ReactNode {
           base.points = base.points.map((pt) => ({ x: pt.x, y: cy + (cy - pt.y) }))
         }
         return base
-      }))
+      }), 'flip vertical')
     }
     closeCtxMenu()
-  }, [selectedElement, elements, selectedIds, upsertElement, upsertElements, closeCtxMenu, pushUndo])
+  }, [selectedElement, elements, selectedIds, trackedUpserts, closeCtxMenu])
 
   // Multi-select z-order: move all selected preserving relative order.
   const bringSelectedToFront = useCallback(() => {
     if (selectedIds.length < 2) return
-    pushUndo()
     const selSet = new Set(selectedIds)
-    const rest = elements.filter((e) => !selSet.has(e.id))
-    const sel = elements.filter((e) => selSet.has(e.id))
-    upsertElements([...rest, ...sel])
+    trackedReorder((prev) => {
+      if (!prev.some((e) => selSet.has(e.id))) return null
+      return [...prev.filter((e) => !selSet.has(e.id)), ...prev.filter((e) => selSet.has(e.id))]
+    }, 'bring to front')
     closeCtxMenu()
-  }, [elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+  }, [selectedIds, trackedReorder, closeCtxMenu])
 
   const sendSelectedToBack = useCallback(() => {
     if (selectedIds.length < 2) return
-    pushUndo()
     const selSet = new Set(selectedIds)
-    const rest = elements.filter((e) => !selSet.has(e.id))
-    const sel = elements.filter((e) => selSet.has(e.id))
-    upsertElements([...sel, ...rest])
+    trackedReorder((prev) => {
+      if (!prev.some((e) => selSet.has(e.id))) return null
+      return [...prev.filter((e) => selSet.has(e.id)), ...prev.filter((e) => !selSet.has(e.id))]
+    }, 'send to back')
     closeCtxMenu()
-  }, [elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+  }, [selectedIds, trackedReorder, closeCtxMenu])
+
+  // Single-element z-order via the same reorder path (undoable).
+  const bringToFrontTracked = useCallback((id: string) => {
+    trackedReorder((prev) => {
+      const idx = prev.findIndex((e) => e.id === id)
+      if (idx === -1 || idx === prev.length - 1) return null
+      const next = [...prev]
+      const [el] = next.splice(idx, 1)
+      next.push(el)
+      return next
+    }, 'bring to front')
+    closeCtxMenu()
+  }, [trackedReorder, closeCtxMenu])
+
+  const bringForwardTracked = useCallback((id: string) => {
+    trackedReorder((prev) => {
+      const idx = prev.findIndex((e) => e.id === id)
+      if (idx === -1 || idx === prev.length - 1) return null
+      const next = [...prev]
+      const [el] = next.splice(idx, 1)
+      next.splice(idx + 1, 0, el)
+      return next
+    }, 'bring forward')
+    closeCtxMenu()
+  }, [trackedReorder, closeCtxMenu])
+
+  const sendBackwardTracked = useCallback((id: string) => {
+    trackedReorder((prev) => {
+      const idx = prev.findIndex((e) => e.id === id)
+      if (idx <= 0) return null
+      const next = [...prev]
+      const [el] = next.splice(idx, 1)
+      next.splice(idx - 1, 0, el)
+      return next
+    }, 'send backward')
+    closeCtxMenu()
+  }, [trackedReorder, closeCtxMenu])
+
+  const sendToBackTracked = useCallback((id: string) => {
+    trackedReorder((prev) => {
+      const idx = prev.findIndex((e) => e.id === id)
+      if (idx <= 0) return null
+      const next = [...prev]
+      const [el] = next.splice(idx, 1)
+      next.unshift(el)
+      return next
+    }, 'send to back')
+    closeCtxMenu()
+  }, [trackedReorder, closeCtxMenu])
 
   const hasSelection = selectedIds.length > 0
   const hasMultiSel = selectedIds.length > 1
@@ -580,81 +674,73 @@ export function CanvasView(): ReactNode {
 
   const handlePasteStyle = useCallback(() => {
     if (!copiedStyle || !hasSelection) return
-    pushUndo()
     const updated = elements
       .filter((e) => selectedIds.includes(e.id))
       .map((e) => ({ ...e, ...copiedStyle }))
-    upsertElements(updated)
+    trackedUpserts(updated, 'paste style')
     closeCtxMenu()
-  }, [copiedStyle, hasSelection, elements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+  }, [copiedStyle, hasSelection, elements, selectedIds, trackedUpserts, closeCtxMenu])
 
   // ── Alignment handlers (dirty-only writes) ────────────────
   const alignLeft = useCallback(() => {
     if (!multiSelectedElements) return
-    pushUndo()
     const minX = Math.min(...multiSelectedElements.map((e) => getNormalizedBounds(e).x))
-    upsertElements(multiSelectedElements.map((e) => ({ ...e, x: minX })))
+    trackedUpserts(multiSelectedElements.map((e) => ({ ...e, x: minX })), 'align')
     closeCtxMenu()
-  }, [multiSelectedElements, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, trackedUpserts, closeCtxMenu])
 
   const alignRight = useCallback(() => {
     if (!multiSelectedElements) return
-    pushUndo()
     const maxRight = Math.max(...multiSelectedElements.map((e) => {
       const b = getNormalizedBounds(e)
       return b.x + b.w
     }))
-    upsertElements(multiSelectedElements.map((e) => ({ ...e, x: maxRight - Math.abs(e.width) })))
+    trackedUpserts(multiSelectedElements.map((e) => ({ ...e, x: maxRight - Math.abs(e.width) })), 'align')
     closeCtxMenu()
-  }, [multiSelectedElements, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, trackedUpserts, closeCtxMenu])
 
   const alignCenterX = useCallback(() => {
     if (!multiSelectedElements) return
-    pushUndo()
     const centers = multiSelectedElements.map((e) => {
       const b = getNormalizedBounds(e)
       return b.x + b.w / 2
     })
     const avgCenter = centers.reduce((a, b) => a + b, 0) / centers.length
-    upsertElements(multiSelectedElements.map((e) => ({ ...e, x: avgCenter - Math.abs(e.width) / 2 })))
+    trackedUpserts(multiSelectedElements.map((e) => ({ ...e, x: avgCenter - Math.abs(e.width) / 2 })), 'align')
     closeCtxMenu()
-  }, [multiSelectedElements, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, trackedUpserts, closeCtxMenu])
 
   const alignTop = useCallback(() => {
     if (!multiSelectedElements) return
-    pushUndo()
     const minY = Math.min(...multiSelectedElements.map((e) => getNormalizedBounds(e).y))
-    upsertElements(multiSelectedElements.map((e) => ({ ...e, y: minY })))
+    trackedUpserts(multiSelectedElements.map((e) => ({ ...e, y: minY })), 'align')
     closeCtxMenu()
-  }, [multiSelectedElements, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, trackedUpserts, closeCtxMenu])
 
   const alignBottom = useCallback(() => {
     if (!multiSelectedElements) return
-    pushUndo()
     const maxBottom = Math.max(...multiSelectedElements.map((e) => {
       const b = getNormalizedBounds(e)
       return b.y + b.h
     }))
-    upsertElements(multiSelectedElements.map((e) => ({ ...e, y: maxBottom - Math.abs(e.height) })))
+    trackedUpserts(multiSelectedElements.map((e) => ({ ...e, y: maxBottom - Math.abs(e.height) })), 'align')
     closeCtxMenu()
-  }, [multiSelectedElements, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, trackedUpserts, closeCtxMenu])
 
   const alignCenterY = useCallback(() => {
     if (!multiSelectedElements) return
-    pushUndo()
     const centers = multiSelectedElements.map((e) => {
       const b = getNormalizedBounds(e)
       return b.y + b.h / 2
     })
     const avgCenter = centers.reduce((a, b) => a + b, 0) / centers.length
-    upsertElements(multiSelectedElements.map((e) => ({ ...e, y: avgCenter - Math.abs(e.height) / 2 })))
+    trackedUpserts(multiSelectedElements.map((e) => ({ ...e, y: avgCenter - Math.abs(e.height) / 2 })), 'align')
     closeCtxMenu()
-  }, [multiSelectedElements, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, trackedUpserts, closeCtxMenu])
 
   // ── Distribute handlers (dirty-only writes) ────────────────
   const distributeHorizontally = useCallback(() => {
     if (!multiSelectedElements || selectedIds.length < 3) return
-    pushUndo()
     const sel = [...multiSelectedElements].sort((a, b) => {
       const ba = getNormalizedBounds(a)
       const bb = getNormalizedBounds(b)
@@ -666,16 +752,15 @@ export function CanvasView(): ReactNode {
     const end = last.x + last.w / 2
     const gap = (end - start) / (sel.length - 1)
 
-    upsertElements(sel.map((e, idx) => {
+    trackedUpserts(sel.map((e, idx) => {
       const targetCenter = start + gap * idx
       return { ...e, x: targetCenter - Math.abs(e.width) / 2 }
-    }))
+    }), 'distribute')
     closeCtxMenu()
-  }, [multiSelectedElements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, selectedIds, trackedUpserts, closeCtxMenu])
 
   const distributeVertically = useCallback(() => {
     if (!multiSelectedElements || selectedIds.length < 3) return
-    pushUndo()
     const sel = [...multiSelectedElements].sort((a, b) => {
       const ba = getNormalizedBounds(a)
       const bb = getNormalizedBounds(b)
@@ -687,12 +772,12 @@ export function CanvasView(): ReactNode {
     const end = last.y + last.h / 2
     const gap = (end - start) / (sel.length - 1)
 
-    upsertElements(sel.map((e, idx) => {
+    trackedUpserts(sel.map((e, idx) => {
       const targetCenter = start + gap * idx
       return { ...e, y: targetCenter - Math.abs(e.height) / 2 }
-    }))
+    }), 'distribute')
     closeCtxMenu()
-  }, [multiSelectedElements, selectedIds, upsertElements, closeCtxMenu, pushUndo])
+  }, [multiSelectedElements, selectedIds, trackedUpserts, closeCtxMenu])
 
   const isDark = useSelector(canvasStore, (s) => s.isDark)
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -725,10 +810,8 @@ export function CanvasView(): ReactNode {
         if (json && json.includes('calidraw-scene')) {
           const els = sceneFromJSON(json)
           if (els && els.length > 0) {
-            pushUndo()
             const fresh = els.map((el) => ({ ...el, id: generateId() }))
-            upsertElements(fresh)
-            setSelectedIds(fresh.map((x) => x.id))
+            trackedUpserts(fresh, 'import scene')
           }
         }
       }}
@@ -802,8 +885,8 @@ export function CanvasView(): ReactNode {
       </div>
 
       <Minimap elements={elements} />
-      <Toolbar elements={elements} onElementUpdate={upsertElement} onElementsUpdate={upsertElements} />
-      <ZoomControl elements={elements} />
+      <Toolbar elements={elements} onElementUpdate={(el) => trackedUpserts([el], 'edit style')} onElementsUpdate={(els) => trackedUpserts(els, 'edit style')} />
+      <ZoomControl onFit={handleZoomFit} onFitSelection={handleZoomSelection} />
 
       {/* Export Modal */}
       {showExport && (
@@ -830,9 +913,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
-                pushUndo()
-                bringToFront(selectedElement.id)
-                closeCtxMenu()
+                bringToFrontTracked(selectedElement.id)
               } else if (hasMultiSel) {
                 bringSelectedToFront()
               }
@@ -844,9 +925,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
-                pushUndo()
-                bringForward(selectedElement.id)
-                closeCtxMenu()
+                bringForwardTracked(selectedElement.id)
               }
             }}
             disabled={!selectedElement}
@@ -856,9 +935,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
-                pushUndo()
-                sendBackward(selectedElement.id)
-                closeCtxMenu()
+                sendBackwardTracked(selectedElement.id)
               }
             }}
             disabled={!selectedElement}
@@ -868,9 +945,7 @@ export function CanvasView(): ReactNode {
           <MenuItem
             onClick={() => {
               if (selectedElement) {
-                pushUndo()
-                sendToBack(selectedElement.id)
-                closeCtxMenu()
+                sendToBackTracked(selectedElement.id)
               } else if (hasMultiSel) {
                 sendSelectedToBack()
               }
