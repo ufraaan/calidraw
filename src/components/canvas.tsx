@@ -193,6 +193,10 @@ export function CanvasView(): ReactNode {
   // ── Text editing state ─────────────────────────────────────
   const [editingTextId, setEditingTextId] = useState<string | null>(null)
   const editingTextEl = editingTextId ? elements.find((e) => e.id === editingTextId) ?? null : null
+  const isNewTextEl = editingTextEl ? !editingTextEl.text : false
+  // Latest TextEditor commit — lets click-away save explicitly
+  // instead of relying on the blur-after-unmount race.
+  const textCommitRef = useRef<(() => void) | null>(null)
 
   const handleTextSave = useCallback(
     (id: string, text: string, width: number, height: number) => {
@@ -206,8 +210,13 @@ export function CanvasView(): ReactNode {
   )
 
   const handleTextCancel = useCallback(() => {
+    // Cancelling a brand-new (still empty) placeholder removes it
+    // silently (no undo entry) so no invisible boxes pile up.
+    if (editingTextId && isNewTextEl) {
+      void deleteElements([editingTextId])
+    }
     setEditingTextId(null)
-  }, [])
+  }, [editingTextId, isNewTextEl, deleteElements])
 
   const closeCtxMenu = useCallback(() => setCtxMenu(null), [])
 
@@ -253,8 +262,10 @@ export function CanvasView(): ReactNode {
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       closeCtxMenu()
-      // Click outside text editor — commit
+      // Click outside the text editor — commit first so the text
+      // is saved, then proceed with the pointer handling.
       if (editingTextId) {
+        textCommitRef.current?.()
         setEditingTextId(null)
       }
       handlePointerDown(e)
@@ -836,6 +847,8 @@ export function CanvasView(): ReactNode {
       {editingTextEl && (
         <TextEditor
           element={editingTextEl}
+          isNew={isNewTextEl}
+          commitRef={textCommitRef}
           onSave={handleTextSave}
           onCancel={handleTextCancel}
         />

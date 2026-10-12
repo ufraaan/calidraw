@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import type { MutableRefObject } from 'react'
 import { canvasStore } from '../stores/canvas-store'
 import type { Element } from '../types'
 import type { ReactNode } from 'react'
@@ -11,13 +12,17 @@ function getMeasureCtx(): CanvasRenderingContext2D {
 
 interface TextEditorProps {
   element: Element
+  isNew: boolean
+  commitRef: MutableRefObject<(() => void) | null>
   onSave: (id: string, text: string, width: number, height: number) => void
   onCancel: () => void
 }
 
-export function TextEditor({ element, onSave, onCancel }: TextEditorProps): ReactNode {
+export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: TextEditorProps): ReactNode {
   const ref = useRef<HTMLTextAreaElement>(null)
   const [value, setValue] = useState(element.text ?? '')
+  // Guard against double-commit (e.g. Cmd+Enter then blur on unmount).
+  const doneRef = useRef(false)
 
   // Focus + put cursor at end
   useEffect(() => {
@@ -38,6 +43,8 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
   }, [value])
 
   const commit = useCallback(() => {
+    if (doneRef.current) return
+    doneRef.current = true
     if (value.trim()) {
       // Compute the dimensions from the text content.
       // We use a shared offscreen canvas to measure so the element
@@ -61,22 +68,41 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
     }
   }, [value, element, onSave, onCancel])
 
+  // Expose commit to the parent so click-away / tool switches can
+  // save explicitly instead of relying on the blur race.
+  useEffect(() => {
+    commitRef.current = commit
+    return () => {
+      commitRef.current = null
+    }
+  }, [commit, commitRef])
+
+  const cancel = useCallback(() => {
+    if (doneRef.current) return
+    doneRef.current = true
+    onCancel()
+  }, [onCancel])
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     e.stopPropagation()
     if (e.key === 'Escape') {
       e.preventDefault()
-      onCancel()
+      cancel()
       return
     }
-    // Cmd/Ctrl+Enter → save & exit. Plain Enter inserts a newline.
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    // Plain Enter → save & exit. Shift+Enter → newline.
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       commit()
     }
-  }, [commit, onCancel])
+  }, [commit, cancel])
 
   const s = canvasStore.state
   const fontSize = (element.fontSize ?? 20) * s.zoom
+  // Editor chrome padding — offset the position so the typed text
+  // sits exactly where the canvas renderer will draw it.
+  const padX = 8
+  const padY = 6
 
   return (
     <textarea
@@ -86,27 +112,30 @@ export function TextEditor({ element, onSave, onCancel }: TextEditorProps): Reac
       onKeyDown={handleKeyDown}
       onKeyUp={(e) => e.stopPropagation()}
       onBlur={commit}
-      aria-label="Text element editor. Press Control Enter to save, Escape to cancel."
-      className="absolute overflow-hidden border-0 p-0 outline-none dark:bg-white/[0.06]"
+      aria-label="Text element editor. Press Enter to save, Shift Enter for a new line, Escape to cancel."
+      className="absolute z-10 overflow-hidden rounded-sm border-0 outline-none"
       style={{
-        left: element.x * s.zoom + s.offsetX,
-        top: element.y * s.zoom + s.offsetY,
+        left: element.x * s.zoom + s.offsetX - padX,
+        top: element.y * s.zoom + s.offsetY - padY,
         fontFamily: element.fontFamily ?? 'sans-serif',
         fontSize,
         lineHeight: 1.2,
         color: element.strokeColor,
         caretColor: element.strokeColor,
-        minWidth: 20,
-        minHeight: fontSize + 4,
+        minWidth: 60,
+        minHeight: fontSize + padY * 2,
+        padding: `${padY}px ${padX}px`,
+        margin: 0,
         whiteSpace: 'pre-wrap',
         overflowWrap: 'break-word',
-        // A faint dashed border so the user can see where the text area is
-        outline: '1px dashed rgba(232,160,122,0.5)',
+        outline: '1.5px solid rgba(232,160,122,0.8)',
         outlineOffset: 0,
         resize: 'none',
-        background: 'rgba(127,127,127,0.08)',
+        background: s.isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.95)',
+        boxShadow: '0 4px 16px -4px rgba(0,0,0,0.15)',
       }}
       rows={1}
+      placeholder={isNew ? 'type here' : undefined}
       spellCheck={false}
       autoComplete="off"
       autoCorrect="off"
