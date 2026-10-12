@@ -263,11 +263,12 @@ export function CanvasView(): ReactNode {
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       closeCtxMenu()
-      // Click outside the text editor — commit first so the text
-      // is saved, then proceed with the pointer handling.
+      // Click outside the text editor — commit first. The click is
+      // consumed so it never plants a second placeholder underneath.
       if (editingTextId) {
         textCommitRef.current?.()
         setEditingTextId(null)
+        return
       }
       handlePointerDown(e)
     },
@@ -275,8 +276,17 @@ export function CanvasView(): ReactNode {
   )
 
   // ── Double-click → text editing ────────────────────────────
+  // Only real (non-empty) text opens; stray empty placeholders
+  // left by the two clicks are garbage-collected silently.
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const empties = elementsRef.current
+        .filter((el) => el.type === 'text' && !el.text)
+        .map((el) => el.id)
+      if (empties.length > 0) {
+        void deleteElements(empties)
+      }
+
       const s = canvasStore.state
       const cx = (e.clientX - s.offsetX) / s.zoom
       const cy = (e.clientY - s.offsetY) / s.zoom
@@ -285,7 +295,7 @@ export function CanvasView(): ReactNode {
       let hit: Element | undefined
       for (let i = elements.length - 1; i >= 0; i--) {
         const el = elements[i]
-        if (el.type !== 'text') continue
+        if (el.type !== 'text' || !el.text) continue
         const b = getNormalizedBounds(el)
         if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) {
           hit = el
@@ -298,7 +308,7 @@ export function CanvasView(): ReactNode {
         setSelectedIds([hit.id])
       }
     },
-    [elements],
+    [elements, deleteElements],
   )
 
   // ── Right-click → context menu ────────────────────────────

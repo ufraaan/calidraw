@@ -447,6 +447,9 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
       }
 
       if (tool === 'text') {
+        // Second click of a double-click is handled by onDoubleClick
+        // (edit existing text) — don't plant a placeholder on it.
+        if (e.detail > 1) return
         const state = canvasStore.state
         const el: Element = {
           id: generateId(),
@@ -468,8 +471,8 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           fontSize: state.fontSize,
         }
         onElementCreate(el)
-        // Auto-switch to select so the text editor can take focus
-        setTool('select')
+        // Stay on the text tool so consecutive clicks keep writing,
+        // like the pencil does for consecutive strokes.
         return
       }
 
