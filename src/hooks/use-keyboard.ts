@@ -7,6 +7,8 @@ const toolKeyMap: Record<string, Tool> = {
   r: 'rectangle',
   d: 'diamond',
   o: 'ellipse',
+  c: 'ellipse',
+  '4': 'ellipse',
   a: 'arrow',
   l: 'line',
   p: 'pencil',
@@ -46,7 +48,6 @@ export function setClipboardActions(actions: Partial<ClipboardActions>) {
   Object.assign(clipboardActions, actions)
 }
 
-// In-app clipboard for copy/paste (not system clipboard)
 export let clipboardElements: Element[] = []
 
 export function copyToClipboard(elements: Element[]) {
@@ -64,6 +65,17 @@ function isEditableTarget(e: KeyboardEvent): boolean {
   return false
 }
 
+function activeElementIsEditable(): boolean {
+  try {
+    const a = document.activeElement as HTMLElement | null
+    if (!a) return false
+    const tag = a.tagName
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || a.isContentEditable
+  } catch {
+    return false
+  }
+}
+
 export function useKeyboard() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -71,16 +83,17 @@ export function useKeyboard() {
       const mod = e.ctrlKey || e.metaKey
       const shift = e.shiftKey
 
-      // Escape always works (exit text edit / close menus / select tool)
+      if (e.isComposing || e.keyCode === 229) return
+
+      if (canvasStore.state.editingTextId) return
+
+      if (isEditableTarget(e) || activeElementIsEditable()) return
+
       if (key === 'escape') {
         setTool('select')
         return
       }
 
-      // Don't hijack typing in inputs/textareas/contentEditable.
-      if (isEditableTarget(e)) return
-
-      // Space → temporary pan
       if (e.key === ' ' && !mod) {
         e.preventDefault()
         if (spacePanPrevTool === null) {
@@ -90,13 +103,11 @@ export function useKeyboard() {
         return
       }
 
-      // Tool shortcuts (only when no modifier is held)
       if (!mod && !shift && key in toolKeyMap) {
         setTool(toolKeyMap[key])
         return
       }
 
-      // Shift+1 → zoom to fit, Shift+2 → zoom to selection
       if (!mod && shift && (e.key === '!' || e.key === '1')) {
         e.preventDefault()
         clipboardActions.zoomFit?.()
@@ -108,14 +119,12 @@ export function useKeyboard() {
         return
       }
 
-      // Delete / Backspace
       if (key === 'delete' || key === 'backspace') {
         e.preventDefault()
         clipboardActions.deleteSelected()
         return
       }
 
-      // ── Modifier-based shortcuts ──────────────────────────
       if (mod) {
         switch (key) {
           case 'z':
@@ -143,8 +152,6 @@ export function useKeyboard() {
             clipboardActions.cut()
             return
           case 'v':
-            e.preventDefault()
-            clipboardActions.paste()
             return
           case 'd':
             e.preventDefault()
@@ -170,7 +177,6 @@ export function useKeyboard() {
         }
       }
 
-      // ── Arrow keys (nudge) ────────────────────────────────
       const nudgeStep = shift ? 10 : 1
       switch (e.key) {
         case 'ArrowUp':
@@ -200,10 +206,10 @@ export function useKeyboard() {
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('keyup', handleKeyUp)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('keyup', handleKeyUp)
     }
   }, [])

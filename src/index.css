@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 html,
 body,
 #root {
@@ -18,10 +20,6 @@ body,
   box-sizing: border-box;
 }
 
-/* ── Calidraw UI tokens ───────────────────────────────────────
-   One accent (warm brand), monochrome everything else.
-   Panels share one surface, one hairline, one shadow, three radii.
-   Type: system stack, three roles (label / text / faint). */
 :root {
   --accent: #e8a07a;
   --accent-wash: rgba(232, 160, 122, 0.12);
@@ -42,22 +40,19 @@ body,
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --panel: rgba(24, 24, 27, 0.88);
-    --hairline: rgba(255, 255, 255, 0.09);
-    --ink: #d4d4d8;
-    --ink-soft: #a1a1aa;
-    --ink-faint: #71717a;
-    --wash: rgba(255, 255, 255, 0.07);
-    --wash-press: rgba(255, 255, 255, 0.12);
-    --shadow-panel:
-      0 0 0 1px var(--hairline),
-      0 12px 32px -16px rgba(0, 0, 0, 0.6);
-  }
+.dark {
+  --panel: rgba(24, 24, 27, 0.88);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --ink: #d4d4d8;
+  --ink-soft: #a1a1aa;
+  --ink-faint: #71717a;
+  --wash: rgba(255, 255, 255, 0.07);
+  --wash-press: rgba(255, 255, 255, 0.12);
+  --shadow-panel:
+    0 0 0 1px var(--hairline),
+    0 12px 32px -16px rgba(0, 0, 0, 0.6);
 }
 
-/* ── Shared surfaces ────────────────────────────────────────── */
 .ui-panel {
   background: var(--panel);
   -webkit-backdrop-filter: blur(16px);
@@ -74,7 +69,6 @@ body,
   box-shadow: var(--shadow-panel);
 }
 
-/* ── Type roles ─────────────────────────────────────────────── */
 .ui-label {
   font-size: 11px;
   font-weight: 500;
@@ -96,7 +90,6 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Controls ───────────────────────────────────────────────── */
 .ui-iconbtn {
   display: flex;
   align-items: center;
@@ -190,12 +183,10 @@ body,
   white-space: nowrap;
 }
 
-/* ── Small swatches ─────────────────────────────────────────── */
 .ui-swatch {
   border-radius: 4px;
 }
 
-/* ── Entrance (occasional surfaces only: menu, modal) ───────── */
 .ui-enter {
   opacity: 1;
   transform: scale(1);
@@ -222,10 +213,8 @@ body,
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .ui-backdrop {
-    background: rgba(0, 0, 0, 0.5);
-  }
+.dark .ui-backdrop {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -237,7 +226,6 @@ body,
   }
 }
 
-/* ── Global focus + selection ───────────────────────────────── */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

@@ -76,7 +76,6 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
       >
         <span className="ui-label">Export</span>
 
-        {/* Filename */}
         <label className="flex flex-col gap-1.5">
           <span className="ui-faint">Filename</span>
           <input
@@ -90,7 +89,6 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
           />
         </label>
 
-        {/* Mode */}
         <div className="flex gap-1.5" role="group" aria-label="Export scope">
           <button type="button" className={`ui-btn flex-1 ${mode === 'all' ? 'is-active' : ''}`} onClick={() => setMode('all')}>
             Entire canvas
@@ -105,7 +103,6 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
           </button>
         </div>
 
-        {/* Scale — PNG only */}
         {format === 'png' && (
           <div className="flex gap-1.5" role="group" aria-label="Export scale">
             {[1, 2, 3, 4].map((s) => (
@@ -116,7 +113,6 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
           </div>
         )}
 
-        {/* Format */}
         <div className="flex gap-1.5" role="group" aria-label="Export format">
           <button type="button" className={`ui-btn flex-1 ${format === 'png' ? 'is-active' : ''}`} onClick={() => setFormat('png')}>
             PNG
@@ -135,7 +131,6 @@ export function ExportModal({ elements, selectedIds, onClose }: ExportModalProps
           <span className="text-xs" style={{ color: 'var(--accent)' }} role="status">{feedback}</span>
         )}
 
-        {/* Actions */}
         <div className="flex gap-1.5">
           <button type="button" onClick={onClose} className="ui-btn flex-1">
             Cancel

@@ -26,7 +26,6 @@ interface ColorPickerProps {
   onBowingChange: (bowing: number) => void
 }
 
-/** Tiny canvas that draws a horizontal line at the given stroke width. */
 function StrokePreview({ width, active }: { width: number; active: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
@@ -49,7 +48,6 @@ function StrokePreview({ width, active }: { width: number; active: boolean }) {
   return <canvas ref={ref} className="block" style={{ width: 18, height: 8 }} />
 }
 
-/** Tiny canvas that draws a wavy line showing a bowing level. */
 function BowingPreview({ bowing, active }: { bowing: number; active: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
@@ -65,7 +63,7 @@ function BowingPreview({ bowing, active }: { bowing: number; active: boolean }) 
     ctx.lineWidth = 1.2
     ctx.lineCap = 'round'
     ctx.beginPath()
-    const amp = bowing * 0.6 // wave amplitude scales with bowing
+    const amp = bowing * 0.6
     for (let x = 2; x <= 16; x += 0.5) {
       const y = 5 + Math.sin((x - 2) * 1.2) * amp
       if (x === 2) ctx.moveTo(x, y)
@@ -128,7 +126,7 @@ export function ColorPicker({
       </div>
       {showDetails && (
         <>
-          {/* ── Stroke width (visual previews) ─────────────── */}
+
           <div className="ui-div w-px self-stretch" />
           <div className="flex items-center gap-0.5" role="group" aria-label="Stroke width">
             {[1, 2, 4].map((w) => (
@@ -146,7 +144,6 @@ export function ColorPicker({
             ))}
           </div>
 
-          {/* ── Opacity slider ─────────────────────────────── */}
           <div className="ui-div w-px self-stretch" />
           <div className="flex items-center gap-1.5">
             <label className="ui-faint sr-only" htmlFor={`opacity-${label}`}>Opacity</label>
@@ -177,7 +174,6 @@ export function ColorPicker({
             </span>
           </div>
 
-          {/* ── Bowing presets ────────────────────────────── */}
           <div className="ui-div w-px self-stretch" />
           <div className="flex items-center gap-0.5" role="group" aria-label="Bowing">
             {[

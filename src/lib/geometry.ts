@@ -36,7 +36,7 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
 }
 
 export function hitTest(point: Point, element: Element): boolean {
-  // Path-based elements (pencil, line) — bbox pre-check, then proximity.
+
   if (element.points && element.points.length >= 2) {
     const zoom = canvasStore?.state?.zoom ?? 1
     const threshold = 12 / Math.max(1, zoom)
@@ -57,12 +57,10 @@ export function hitTest(point: Point, element: Element): boolean {
     return false
   }
 
-  // Bounding-box test for everything else
   const bounds = getElementBounds(element)
   return pointInBounds(point, bounds)
 }
 
-// ── Rotation ─────────────────────────────────────────────────
 export function getRotationHandlePosition(element: Element): Point {
   const b = getNormalizedBounds(element)
   return { x: b.x + b.w / 2, y: b.y - 28 }
@@ -74,7 +72,6 @@ export function hitTestRotationHandle(point: Point, element: Element): boolean {
   return Math.abs(point.x - handle.x) <= threshold && Math.abs(point.y - handle.y) <= threshold
 }
 
-/** Compute angle from element center to mouse point */
 export function getRotationAngle(element: Element, mouse: Point): number {
   const b = getNormalizedBounds(element)
   const cx = b.x + b.w / 2
@@ -86,13 +83,10 @@ export function generateId(): string {
   return crypto.randomUUID()
 }
 
-// ── Resize ─────────────────────────────────────────────────
-
 export type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br' | 'tm' | 'rm' | 'bm' | 'lm' | 'start' | 'end'
 
 const HANDLE_NAMES: ResizeHandle[] = ['tl', 'tr', 'br', 'bl', 'tm', 'rm', 'bm', 'lm']
 
-/** Normalised bounding box (x,y = top-left, w/h always positive). */
 export function getNormalizedBounds(element: Element): {
   x: number
   y: number
@@ -108,42 +102,33 @@ export function getNormalizedBounds(element: Element): {
   }
 }
 
-/** Returns the resize-handle positions in canvas coords. */
 export function getResizeHandles(element: Element): Point[] {
-  // For arrows: only start and endpoint handles
+
   if (element.type === 'arrow') {
     return [
-      { x: element.x, y: element.y },                     // start (tail)
-      { x: element.x + element.width, y: element.y + element.height }, // end (head)
+      { x: element.x, y: element.y },
+      { x: element.x + element.width, y: element.y + element.height },
     ]
   }
   const { x, y, w, h } = getNormalizedBounds(element)
   return [
-    { x, y },                 // tl
-    { x: x + w, y },          // tr
-    { x: x + w, y: y + h },   // br
-    { x, y: y + h },          // bl
-    { x: x + w / 2, y },      // tm
-    { x: x + w, y: y + h / 2 }, // rm
-    { x: x + w / 2, y: y + h }, // bm
-    { x, y: y + h / 2 },      // lm
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h },
+    { x: x + w / 2, y },
+    { x: x + w, y: y + h / 2 },
+    { x: x + w / 2, y: y + h },
+    { x, y: y + h / 2 },
   ]
 }
 
-/**
- * Hit-test the mouse against resize handles of an element.
- *
- * Corners are point-checked (must be near the exact corner).
- * Edges are line-checked — anywhere along the edge triggers resize,
- * making it much easier to grab.
- */
 export function hitTestResizeHandle(
   point: Point,
   element: Element,
 ): ResizeHandle | null {
   const threshold = 7
 
-  // Arrows: hit-test the two endpoints
   if (element.type === 'arrow') {
     const start = { x: element.x, y: element.y }
     const end = { x: element.x + element.width, y: element.y + element.height }
@@ -165,7 +150,6 @@ export function hitTestResizeHandle(
 
   const b = getNormalizedBounds(element)
 
-  // For very small elements, fall back to the bounding box
   if (b.w < 8 || b.h < 8) {
     const handles = getResizeHandles(element)
     const thresh = 8
@@ -180,7 +164,6 @@ export function hitTestResizeHandle(
     return null
   }
 
-  // 1) Corners — point hit (takes priority)
   const corners: { handle: ResizeHandle; x: number; y: number }[] = [
     { handle: 'tl', x: b.x, y: b.y },
     { handle: 'tr', x: b.x + b.w, y: b.y },
@@ -196,9 +179,8 @@ export function hitTestResizeHandle(
     }
   }
 
-  // 2) Edges — line hit (anywhere along the edge)
   const edgeThreshold = 8
-  // Top edge
+
   if (
     Math.abs(point.y - b.y) <= edgeThreshold &&
     point.x >= b.x &&
@@ -206,7 +188,7 @@ export function hitTestResizeHandle(
   ) {
     return 'tm'
   }
-  // Bottom edge
+
   if (
     Math.abs(point.y - (b.y + b.h)) <= edgeThreshold &&
     point.x >= b.x &&
@@ -214,7 +196,7 @@ export function hitTestResizeHandle(
   ) {
     return 'bm'
   }
-  // Left edge
+
   if (
     Math.abs(point.x - b.x) <= edgeThreshold &&
     point.y >= b.y &&
@@ -222,7 +204,7 @@ export function hitTestResizeHandle(
   ) {
     return 'lm'
   }
-  // Right edge
+
   if (
     Math.abs(point.x - (b.x + b.w)) <= edgeThreshold &&
     point.y >= b.y &&
@@ -234,22 +216,16 @@ export function hitTestResizeHandle(
   return null
 }
 
-/**
- * Compute the resized element given a handle and mouse position.
- * If `aspectLock` is true (Shift held) the original aspect ratio is preserved
- * for corner handles.
- */
 export function getResizedElement(
   element: Element,
   handle: ResizeHandle,
   mouse: Point,
   aspectLock: boolean,
 ): Element {
-  // ── Arrow endpoint dragging ──────────────────────────────
-  // Dragging one endpoint keeps the opposite end anchored.
+
   if (element.type === 'arrow') {
     if (handle === 'start') {
-      // Keep end fixed, move start to mouse
+
       const endX = element.x + element.width
       const endY = element.y + element.height
       const nx = mouse.x
@@ -257,7 +233,7 @@ export function getResizedElement(
       return { ...element, x: nx, y: ny, width: endX - nx, height: endY - ny }
     }
     if (handle === 'end') {
-      // Keep start fixed, move end to mouse
+
       const nx = element.x
       const ny = element.y
       return { ...element, x: nx, y: ny, width: mouse.x - nx, height: mouse.y - ny }
@@ -270,7 +246,6 @@ export function getResizedElement(
   let nw = b.w
   let nh = b.h
 
-  // ── Apply raw mouse delta ──────────────────────────────────
   switch (handle) {
     case 'br':
       nw = mouse.x - b.x
@@ -308,28 +283,23 @@ export function getResizedElement(
       break
   }
 
-  // Minimum size
   if (nw < 5) nw = 5
   if (nh < 5) nh = 5
 
-  // ── Aspect-ratio lock (Shift) — corner handles only ────────
   if (aspectLock && (handle === 'tl' || handle === 'tr' || handle === 'bl' || handle === 'br')) {
     const ar = b.w / b.h
 
-    // The anchor is the corner opposite the handle being dragged
     const anchorX = handle === 'br' || handle === 'tr' ? b.x : b.x + b.w
     const anchorY = handle === 'br' || handle === 'bl' ? b.y : b.y + b.h
     const dx = Math.abs(mouse.x - anchorX)
     const dy = Math.abs(mouse.y - anchorY)
 
-    // Choose dominant axis (the one that moved more proportionally)
     if (dx / b.w >= dy / b.h) {
       nh = nw / ar
     } else {
       nw = nh * ar
     }
 
-    // Reposition for corners that move their anchor
     if (handle === 'tl') {
       nx = b.x + b.w - nw
       ny = b.y + b.h - nh
@@ -338,10 +308,9 @@ export function getResizedElement(
     } else if (handle === 'bl') {
       nx = b.x + b.w - nw
     }
-    // br: position unchanged (anchor is top-left)
+
   }
 
-  // Offset points for pencil/line elements
   if (element.points) {
     const ob = getNormalizedBounds(element)
     const sx = ob.w > 0 ? nw / ob.w : 1
@@ -351,6 +320,34 @@ export function getResizedElement(
       y: ny + (p.y - ob.y) * sy,
     }))
     return { ...element, x: nx, y: ny, width: nw, height: nh, points: newPoints }
+  }
+
+  // Text resizes by scaling the font — the renderer draws glyphs at
+  // fontSize and ignores the box, so a box-only resize would look like
+  // nothing happened. Scale uniformly, anchored at the edge/corner
+  // opposite the dragged handle, so the box keeps hugging the content.
+  if (element.type === 'text') {
+    const oldFont = element.fontSize ?? 20
+    let scale: number
+    if (handle === 'lm' || handle === 'rm') {
+      scale = b.w > 0 ? nw / b.w : 1
+    } else if (handle === 'tm' || handle === 'bm') {
+      scale = b.h > 0 ? nh / b.h : 1
+    } else {
+      // Corners: follow whichever axis moved more, relative to its size.
+      const sx = b.w > 0 ? nw / b.w : 1
+      const sy = b.h > 0 ? nh / b.h : 1
+      scale = Math.abs(sx - 1) >= Math.abs(sy - 1) ? sx : sy
+    }
+    if (!Number.isFinite(scale) || scale <= 0) scale = 1
+    const newFont = Math.min(400, Math.max(6, Math.round(oldFont * scale)))
+    const applied = newFont / oldFont
+    const uw = Math.max(5, b.w * applied)
+    const uh = Math.max(5, b.h * applied)
+    // Anchor the edge/corner opposite the dragged handle.
+    const ax = handle === 'tl' || handle === 'bl' || handle === 'lm' ? b.x + b.w - uw : b.x
+    const ay = handle === 'tl' || handle === 'tr' || handle === 'tm' ? b.y + b.h - uh : b.y
+    return { ...element, x: ax, y: ay, width: uw, height: uh, fontSize: newFont }
   }
 
   return { ...element, x: nx, y: ny, width: nw, height: nh }

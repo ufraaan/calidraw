@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useSelector } from '@tanstack/react-store'
 import { canvasStore, setSelectedIds, setOffset, setTool, zoomAtPoint } from '../stores/canvas-store'
-import { renderScene, BRAND } from '../lib/renderer'
+import { renderScene, BRAND, onImageReady } from '../lib/renderer'
 import { startDrawing, updateDrawing, endDrawing, isShapeTool } from '../lib/tools'
 import { LaserPointer } from '@excalidraw/laser-pointer'
 import { hitTest, hitTestResizeHandle, getResizedElement, hitTestRotationHandle, getRotationAngle, generateId, getElementBounds, pointInBounds } from '../lib/geometry'
@@ -48,7 +48,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
   const zoom = useSelector(canvasStore, (s) => s.zoom)
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
 
-  // ── Refs ───────────────────────────────────────────────────
   const elementsRef = useRef(elements)
   const selectedRef = useRef(selectedIds)
   const transientRef = useRef<Element[]>([])
@@ -68,7 +67,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     selectedRef.current = selectedIds
   })
 
-  // ── Direct canvas render ───────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -81,26 +79,22 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     const s = canvasStore.state
     const dpr = window.devicePixelRatio || 1
 
-    // Base transform (DPR) + world transform. renderScene clears
-    // in device pixels and culls against this transform.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.translate(s.offsetX, s.offsetY)
     ctx.scale(s.zoom, s.zoom)
 
     const hidden = dragIdsRef.current
     const visible = elementsRef.current.filter((e) => !hidden.has(e.id))
-    // Build set of selected IDs for rendering
+
     const sel = new Set(selectedRef.current)
 
     const all = visible.concat(transientRef.current)
-    // When editing text, don't render the element on canvas — it's
-    // overlaid by the DOM textarea and would cause visual overlap.
+
     const toRender = editingTextId
       ? all.filter((el) => el.type !== 'text' || el.id !== editingTextId)
       : all
     renderScene(ctx, toRender, sel, true, s.zoom)
 
-    // Hover highlight (after scene — renderScene clears first)
     if (tool === 'select' && !dragOriginRef.current && !resizeHandleRef.current && hoveredElRef.current) {
       const hov = elementsRef.current.find((e) => e.id === hoveredElRef.current)
       if (hov && !sel.has(hov.id)) {
@@ -118,7 +112,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
       }
     }
 
-    // Marquee
     const m = marqueeRef.current
     if (m) {
       const rx = Math.min(m.x1, m.x2)
@@ -136,7 +129,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
       ctx.restore()
     }
 
-    // Dimension label during resize
     if (resizeHandleRef.current && transientRef.current.length === 1 && cursorPosRef.current) {
       const el = transientRef.current[0]
       const w = Math.abs(el.width)
@@ -162,10 +154,9 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
       ctx.restore()
     }
 
-    // Laser pointer trail (no shadowBlur — expensive; fresh instance per frame is fine)
     const laserPts = laserPointsRef.current
     if (laserPts.length >= 2) {
-      // Keep only the most recent points — trail has a max visible length.
+
       const maxTrail = 60
       const recent = laserPts.length > maxTrail
         ? laserPts.slice(laserPts.length - maxTrail)
@@ -196,14 +187,13 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         ctx.restore()
       }
     }
-  }, [tool])
+  }, [tool, editingTextId])
 
   const scheduleDraw = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
     rafRef.current = requestAnimationFrame(draw)
   }, [draw])
 
-  // ── Canvas setup (DPR-aware) ──────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -223,9 +213,12 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
 
   useEffect(() => {
     draw()
-  }, [draw, elements, zoom, selectedIds, tool])
+  }, [draw, elements, zoom, selectedIds, tool, editingTextId])
 
-  // ── Wheel ─────────────────────────────────────────────────
+  useEffect(() => onImageReady(() => {
+    scheduleDraw()
+  }), [scheduleDraw])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -248,7 +241,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [scheduleDraw])
 
-  // ── Touch pinch zoom ──────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -304,14 +296,12 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     }
   }, [scheduleDraw])
 
-  // ── Cursor ─────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     canvas.style.cursor = panStartRef.current ? 'grabbing' : (TOOL_CURSOR[tool] ?? 'default')
   }, [tool])
 
-  // ── Coordinate mapping (reads live store — no stale closures) ─
   const screenToCanvas = useCallback(
     (sx: number, sy: number): Point => {
       const s = canvasStore.state
@@ -323,7 +313,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     [],
   )
 
-  // ── Helper: snapshot selected elements ─────────────────────
   const snapshotSelection = useCallback(
     (ids: string[]) =>
       ids
@@ -333,12 +322,10 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     [],
   )
 
-  // ── Pointer down ──────────────────────────────────────────
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const point = screenToCanvas(e.clientX, e.clientY)
 
-      // Middle-click pan
       if (e.button === 1) {
         panStartRef.current = { x: e.clientX, y: e.clientY }
         if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing'
@@ -357,7 +344,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
             ? elementsRef.current.find((el) => el.id === selectedRef.current[0])
             : undefined
 
-        // 1) Rotation handle on first selected element
         if (firstSelected) {
           if (hitTestRotationHandle(point, firstSelected)) {
             rotatingRef.current = firstSelected.id
@@ -366,7 +352,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           }
         }
 
-        // 2) Resize handles on first selected element
         if (firstSelected) {
           const handle = hitTestResizeHandle(point, firstSelected)
           if (handle) {
@@ -376,9 +361,7 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           }
         }
 
-        // 2b) If clicking inside the bounding box of an already-selected
-        //     element, drag from anywhere in the box (not just on stroke).
-        if (selectedRef.current.length > 0) {
+        if (selectedRef.current.length > 0 && !e.altKey) {
           const selSet = new Set(selectedRef.current)
           let inSelBox: Element | undefined
           for (const el of elementsRef.current) {
@@ -397,7 +380,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           }
         }
 
-        // 2) Element hit (topmost first — reverse loop, no allocation)
         let hit: Element | undefined
         {
           const arr = elementsRef.current
@@ -413,13 +395,13 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           const isMultiSel = selectedRef.current.length > 1
 
           if (e.altKey) {
-            // Alt + drag = duplicate
+
             const clone: Element = { ...hit, id: generateId() }
             onElementCreate(clone)
             setSelectedIds([clone.id])
             dragOriginRef.current = { point, elements: [{ ...clone }] }
           } else if (e.ctrlKey || e.metaKey) {
-            // Ctrl/Cmd + click = toggle selection
+
             const next = alreadyInSel
               ? selectedRef.current.filter((id) => id !== hit.id)
               : [...selectedRef.current, hit.id]
@@ -429,16 +411,16 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
               dragOriginRef.current = { point, elements: snaps }
             }
           } else if (alreadyInSel && isMultiSel) {
-            // Click on element already in multi-selection → drag ALL selected
+
             const snaps = snapshotSelection(selectedRef.current)
             dragOriginRef.current = { point, elements: snaps }
           } else {
-            // Single select + drag
+
             setSelectedIds([hit.id])
             dragOriginRef.current = { point, elements: [{ ...hit }] }
           }
         } else {
-          // 3) Empty space → marquee
+
           marqueeRef.current = { x1: point.x, y1: point.y, x2: point.x, y2: point.y }
           setSelectedIds([])
         }
@@ -447,9 +429,7 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
       }
 
       if (tool === 'text') {
-        // Second click of a double-click is handled by onDoubleClick
-        // (edit existing text) — don't plant a placeholder on it.
-        if (e.detail > 1) return
+        e.preventDefault()
         const state = canvasStore.state
         const el: Element = {
           id: generateId(),
@@ -471,8 +451,7 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           fontSize: state.fontSize,
         }
         onElementCreate(el)
-        // Stay on the text tool so consecutive clicks keep writing,
-        // like the pencil does for consecutive strokes.
+
         return
       }
 
@@ -490,13 +469,11 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     [tool, screenToCanvas, scheduleDraw, onElementCreate, snapshotSelection],
   )
 
-  // ── Pointer move ──────────────────────────────────────────
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const point = screenToCanvas(e.clientX, e.clientY)
       cursorPosRef.current = point
 
-      // Pan
       if (panStartRef.current) {
         const dx = e.clientX - panStartRef.current.x
         const dy = e.clientY - panStartRef.current.y
@@ -507,7 +484,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Marquee
       if (marqueeRef.current) {
         marqueeRef.current.x2 = point.x
         marqueeRef.current.y2 = point.y
@@ -515,7 +491,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Rotation
       if (rotatingRef.current && dragOriginRef.current) {
         const { elements: els } = dragOriginRef.current
         const angle = getRotationAngle(els[0], point)
@@ -525,7 +500,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Resize
       if (resizeHandleRef.current && dragOriginRef.current) {
         const { elements: els } = dragOriginRef.current
         const aspectLock = e.shiftKey
@@ -536,7 +510,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Drag
       if (dragOriginRef.current) {
         const { point: startPoint, elements: els } = dragOriginRef.current
         const dx = point.x - startPoint.x
@@ -552,7 +525,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Hover detection + cursor (select tool only)
       if (tool === 'select') {
         const firstSelected =
           selectedRef.current.length > 0
@@ -561,7 +533,7 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         let cursorSet = false
 
         if (firstSelected && selectedRef.current.length === 1) {
-          // Rotation handle cursor (takes priority)
+
           if (hitTestRotationHandle(point, firstSelected)) {
             if (canvasRef.current) canvasRef.current.style.cursor = 'grab'
             cursorSet = true
@@ -577,7 +549,7 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         }
 
         if (!cursorSet) {
-          // Hover highlight (reverse loop, no allocation)
+
           let hit: Element | undefined
           {
             const arr = elementsRef.current
@@ -590,7 +562,7 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
           }
           if (hit) {
             hoveredElRef.current = hit.id
-            // Show move cursor when hovering an element
+
             if (canvasRef.current) canvasRef.current.style.cursor = 'move'
             scheduleDraw()
           } else {
@@ -603,10 +575,9 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         }
       }
 
-      // Laser pointer trail
       if (tool === 'laser' && laserPointsRef.current.length > 0) {
         laserPointsRef.current.push(point)
-        // Keep the buffer bounded
+
         if (laserPointsRef.current.length > 200) {
           laserPointsRef.current = laserPointsRef.current.slice(-100)
         }
@@ -614,7 +585,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Drawing preview
       if (isShapeTool(tool as Tool)) {
         const partial = updateDrawing(point)
         if (partial && partial.type) {
@@ -630,14 +600,12 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
     [tool, screenToCanvas, scheduleDraw],
   )
 
-  // ── Pointer up ────────────────────────────────────────────
   const handlePointerUp = useCallback(() => {
       panStartRef.current = null
       if (canvasRef.current) {
         canvasRef.current.style.cursor = TOOL_CURSOR[tool] ?? 'default'
       }
 
-      // Marquee
       if (marqueeRef.current) {
         const { x1, y1, x2, y2 } = marqueeRef.current
         marqueeRef.current = null
@@ -659,7 +627,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Rotation
       if (rotatingRef.current) {
         const moved = transientRef.current
         rotatingRef.current = null
@@ -670,7 +637,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Resize
       if (resizeHandleRef.current) {
         const moved = transientRef.current
         resizeHandleRef.current = null
@@ -681,7 +647,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Drag (multi-element supported)
       if (dragOriginRef.current) {
         const moved = transientRef.current
         dragOriginRef.current = null
@@ -691,7 +656,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Laser pointer — never commits to elements
       if (tool === 'laser') {
         transientRef.current = []
         laserPointsRef.current = []
@@ -699,8 +663,6 @@ export function useCanvas({ elements, editingTextId, onElementCreate, onElements
         return
       }
 
-      // Drawing complete — auto-switch to select, except pencil
-      // (pencil stays on itself so you can sketch consecutive strokes)
       if (isShapeTool(tool as Tool)) {
         transientRef.current = []
         scheduleDraw()

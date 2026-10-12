@@ -34,7 +34,7 @@ const tools: { tool: Tool; label: string; icon: ReactNode; shortcut: string }[] 
   { tool: 'select', label: 'Select', icon: <IconSelect />, shortcut: 'V' },
   { tool: 'rectangle', label: 'Rectangle', icon: <IconRect />, shortcut: 'R' },
   { tool: 'diamond', label: 'Diamond', icon: <IconDiamond />, shortcut: 'D' },
-  { tool: 'ellipse', label: 'Ellipse', icon: <IconEllipse />, shortcut: 'O' },
+  { tool: 'ellipse', label: 'Ellipse', icon: <IconEllipse />, shortcut: 'O · C · 4' },
   { tool: 'arrow', label: 'Arrow', icon: <IconArrow />, shortcut: 'A' },
   { tool: 'line', label: 'Line', icon: <IconLine />, shortcut: 'L' },
   { tool: 'pencil', label: 'Pencil', icon: <IconPencil />, shortcut: 'P' },
@@ -69,7 +69,6 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
   const first = selected.length === 1 ? selected[0] : null
   const isText = first?.type === 'text' || (selected.length === 0 && activeTool === 'text')
 
-  // Display values: single selection → element, multi → mixed (fall back to store).
   const strokeColor = first?.strokeColor ?? storeStroke
   const fillColor = first?.backgroundColor ?? storeFill
   const strokeWidth = first?.strokeWidth ?? storeWidth
@@ -90,7 +89,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
 
   return (
     <>
-      {/* Left tool strip */}
+
       <div
         role="toolbar"
         aria-label="Drawing tools"
@@ -110,7 +109,6 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
         ))}
       </div>
 
-      {/* Bottom style bar — wraps on small screens */}
       <div className="ui-panel pointer-events-auto absolute bottom-6 left-1/2 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 px-3 py-2">
         <span className="ui-label">Stroke</span>
         <ColorPicker
@@ -153,7 +151,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
           onBowingChange={() => {}}
         />
         <div className="ui-div h-4 w-px" />
-        {/* Stroke style */}
+
         <label className="flex items-center gap-1">
           <span className="ui-label">Style</span>
           <select
@@ -203,7 +201,7 @@ export const Toolbar = memo(function Toolbar({ elements, onElementUpdate, onElem
                 }}
                 className="ui-select"
               >
-                {FONT_SIZES.map((s) => (
+                {[...new Set([...FONT_SIZES, fontSize])].sort((a, b) => a - b).map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>

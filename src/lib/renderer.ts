@@ -2,19 +2,50 @@ import rough from 'roughjs'
 import type { RoughCanvas } from 'roughjs/bin/canvas'
 import type { Element, Point } from '../types'
 
-// ── Image cache (LRU, capped) ─────────────────────────────────
 const imageCache = new Map<string, HTMLImageElement>()
 const MAX_IMAGES = 50
+
+type ImageReadyListener = (dataUrl: string) => void
+const imageReadyListeners = new Set<ImageReadyListener>()
+
+export function onImageReady(fn: ImageReadyListener): () => void {
+  imageReadyListeners.add(fn)
+  return () => {
+    imageReadyListeners.delete(fn)
+  }
+}
+
+function notifyImageReady(dataUrl: string) {
+  imageReadyListeners.forEach((fn) => {
+    try {
+      fn(dataUrl)
+    } catch {
+
+    }
+  })
+}
+
+export function seedImage(dataUrl: string, decoded: HTMLImageElement) {
+  if (imageCache.has(dataUrl)) return
+  imageCache.set(dataUrl, decoded)
+  if (imageCache.size > MAX_IMAGES) {
+    const oldest = imageCache.keys().next().value
+    if (oldest) imageCache.delete(oldest)
+  }
+}
 
 function getOrCreateImage(dataUrl: string): HTMLImageElement {
   let img = imageCache.get(dataUrl)
   if (img) {
-    // Refresh LRU order
+
     imageCache.delete(dataUrl)
     imageCache.set(dataUrl, img)
     return img
   }
   img = new Image()
+  const key = dataUrl
+  img.onload = () => notifyImageReady(key)
+  img.onerror = () => notifyImageReady(key)
   img.src = dataUrl
   imageCache.set(dataUrl, img)
   if (imageCache.size > MAX_IMAGES) {
@@ -28,9 +59,6 @@ export function clearImageCache() {
   imageCache.clear()
 }
 
-// ── Rough.js per-canvas cache ────────────────────────────────
-// rough.canvas() wrapper creation is cheap-ish but we cache per canvas
-// to avoid re-instantiation every frame.
 const roughCache = new WeakMap<HTMLCanvasElement, RoughCanvas>()
 function getRoughCanvas(canvas: HTMLCanvasElement): RoughCanvas {
   let rc = roughCache.get(canvas)
@@ -41,10 +69,8 @@ function getRoughCanvas(canvas: HTMLCanvasElement): RoughCanvas {
   return rc
 }
 
-// ── Brand accent ─────────────────────────────────────────────
 export const BRAND = '#e8a07a'
 
-// ── Seed ─────────────────────────────────────────────────────
 function seedFromId(id: string): number {
   let h = 0
   for (let i = 0; i < id.length; i++) {
@@ -54,7 +80,6 @@ function seedFromId(id: string): number {
   return Math.abs(h)
 }
 
-// ── Draw options ─────────────────────────────────────────────
 export function getDrawOptions(element: Element) {
   return {
     stroke: element.strokeColor,
@@ -76,7 +101,6 @@ export function getDrawOptions(element: Element) {
   }
 }
 
-// ── Shape renderers (canvas) ─────────────────────────────────
 function renderRectangle(rc: RoughCanvas, el: Element) {
   const options = getDrawOptions(el)
   const x = el.width >= 0 ? el.x : el.x + el.width
@@ -164,7 +188,6 @@ function renderText(ctx: CanvasRenderingContext2D, el: Element) {
   ctx.restore()
 }
 
-/** Measure a block of text (multi-line) and return its pixel dimensions. */
 let measureCanvas: HTMLCanvasElement | null = null
 export function measureTextBlock(
   text: string,
@@ -191,6 +214,8 @@ function renderImage(ctx: CanvasRenderingContext2D, el: Element) {
   if (!el.imageData) return
   const img = getOrCreateImage(el.imageData)
   if (!img.complete) return
+  const nw = img.naturalWidth || img.width
+  if (nw === 0) return
   const x = el.width >= 0 ? el.x : el.x + el.width
   const y = el.height >= 0 ? el.y : el.y + el.height
   const w = Math.abs(el.width)
@@ -201,7 +226,6 @@ function renderImage(ctx: CanvasRenderingContext2D, el: Element) {
   ctx.restore()
 }
 
-// ── Scene (canvas) ───────────────────────────────────────────
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   elements: Element[],
@@ -210,7 +234,7 @@ export function renderScene(
   zoom = 1,
 ) {
   const canvas = ctx.canvas
-  // Clear in device pixels regardless of the caller's transform.
+
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -218,9 +242,6 @@ export function renderScene(
 
   const rc = getRoughCanvas(canvas)
 
-  // Viewport culling: visible world rect from the current transform.
-  // Our global transform is translate(offset) + scale(zoom) composed
-  // with a DPR base — all axis-aligned, so inverse is trivial.
   let vx0 = -Infinity, vy0 = -Infinity, vx1 = Infinity, vy1 = Infinity
   try {
     const t = ctx.getTransform()
@@ -231,12 +252,12 @@ export function renderScene(
       vy1 = (canvas.height - t.f) / t.d
     }
   } catch {
-    /* getTransform unsupported — draw everything */
+
   }
   const cullPad = 40
 
   for (const el of elements) {
-    // Cull axis-aligned elements outside the viewport (rotated kept).
+
     if (el.angle === 0 && vx0 !== -Infinity) {
       const ex = el.width >= 0 ? el.x : el.x + el.width
       const ey = el.height >= 0 ? el.y : el.y + el.height
@@ -249,7 +270,6 @@ export function renderScene(
     ctx.save()
     ctx.globalAlpha = el.opacity / 100
 
-    // Rotation
     if (el.angle !== 0) {
       const b = getCenter(el)
       ctx.translate(b.cx, b.cy)
@@ -287,7 +307,6 @@ export function renderScene(
     ctx.restore()
   }
 
-  // Selection indicators (draw on top, after all elements)
   if (showSelection) {
     for (const el of elements) {
       if (selectedIds.has(el.id)) {
@@ -297,20 +316,18 @@ export function renderScene(
   }
 }
 
-// ── Selection indicator ──────────────────────────────────────
 function renderSelectionIndicator(
   ctx: CanvasRenderingContext2D,
   el: Element,
   zoom = 1,
 ) {
-  const s = 1 / zoom // scale-down factor to keep screen-size constant
+  const s = 1 / zoom
   const b = getCenter(el)
   const x = el.width >= 0 ? el.x : el.x + el.width
   const y = el.height >= 0 ? el.y : el.y + el.height
   const w = Math.abs(el.width)
   const h = Math.abs(el.height)
 
-  // Apply rotation to selection indicator too
   ctx.save()
   if (el.angle !== 0) {
     ctx.translate(b.cx, b.cy)
@@ -318,7 +335,6 @@ function renderSelectionIndicator(
     ctx.translate(-b.cx, -b.cy)
   }
 
-  // Bounding box dash
   ctx.strokeStyle = BRAND
   ctx.lineWidth = 1 * s
   ctx.setLineDash([3 * s, 4 * s])
@@ -327,14 +343,11 @@ function renderSelectionIndicator(
 
   const r = 3 * s
 
-  // ── Handle positions ─────────────────────────────────────
-  // Arrows show only start/end endpoint handles; everything
-  // else gets the full 8-point bounding-box set.
   let pts: Point[]
   if (el.type === 'arrow') {
     pts = [
-      { x: el.x, y: el.y },                           // start (tail)
-      { x: el.x + el.width, y: el.y + el.height },    // end (head)
+      { x: el.x, y: el.y },
+      { x: el.x + el.width, y: el.y + el.height },
     ]
   } else {
     pts = [
@@ -353,7 +366,6 @@ function renderSelectionIndicator(
   ctx.strokeStyle = BRAND
   ctx.lineWidth = 1.5 * s
 
-  // Arrow endpoint handles are slightly larger for easier grabbing
   const handleR = el.type === 'arrow' ? r * 2 : r
   for (const p of pts) {
     ctx.beginPath()
@@ -362,7 +374,6 @@ function renderSelectionIndicator(
     ctx.stroke()
   }
 
-  // ── Rotation handle ───────────────────────────────────────
   const rotX = x + w / 2
   const rotY = y - 24 * s
   ctx.strokeStyle = BRAND
@@ -384,7 +395,6 @@ function renderSelectionIndicator(
   ctx.restore()
 }
 
-// ── Offscreen canvas render (PNG export) ─────────────────────
 export function renderElementsToCanvas(
   elements: Element[],
   scale = 2,
@@ -454,7 +464,6 @@ export function downloadAsPNG(
   }, 'image/png')
 }
 
-// ── Rotation center helper ──────────────────────────────────
 function getCenter(el: Element) {
   const x = el.width >= 0 ? el.x : el.x + el.width
   const y = el.height >= 0 ? el.y : el.y + el.height
@@ -463,7 +472,6 @@ function getCenter(el: Element) {
   return { cx: x + w / 2, cy: y + h / 2 }
 }
 
-// ── SVG export ───────────────────────────────────────────────
 function renderSVGElement(
   rc: ReturnType<typeof rough.svg>,
   el: Element,
@@ -607,7 +615,6 @@ export function renderToSVGString(elements: Element[], ids: string[]): string {
 
   const rc = rough.svg(svg)
 
-  // Wrapping group for coordinate transform
   const g = document.createElementNS(xmlns, 'g')
   g.setAttribute('transform', `translate(${-minX + pad}, ${-minY + pad})`)
   svg.appendChild(g)
@@ -616,7 +623,6 @@ export function renderToSVGString(elements: Element[], ids: string[]): string {
     renderSVGElement(rc, el, g)
   }
 
-  // Remove any children rough.js added directly to <svg>
   while (svg.firstChild && svg.firstChild !== g) {
     svg.removeChild(svg.firstChild)
   }
@@ -636,7 +642,6 @@ export function downloadAsSVG(elements: Element[], ids: string[], filename: stri
   URL.revokeObjectURL(url)
 }
 
-// ── Scene JSON export / import ──────────────────────────────
 export function sceneToJSON(elements: Element[]): string {
   return JSON.stringify({ type: 'calidraw-scene', version: 1, elements }, null, 2)
 }
@@ -646,7 +651,7 @@ export function sceneFromJSON(raw: string): Element[] | null {
     const parsed = JSON.parse(raw)
     const arr: unknown = Array.isArray(parsed) ? parsed : parsed.elements
     if (!Array.isArray(arr)) return null
-    // Minimal validation — must have id + type.
+
     const els = arr.filter(
       (e): e is Element =>
         !!e && typeof (e as Element).id === 'string' && typeof (e as Element).type === 'string',

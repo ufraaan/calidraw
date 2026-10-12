@@ -38,7 +38,7 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
 
   return (
     <div className="ui-panel pointer-events-auto absolute bottom-6 right-6 flex items-center gap-2 px-3 py-2">
-      {/* Auto-save indicator (separate concern, always rendered for layout stability) */}
+
       <div className="flex items-center gap-1.5" aria-live="polite">
         <div
           className={`size-1.5 rounded-full transition-colors duration-300 ${
@@ -56,7 +56,6 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
 
       <div className="ui-div h-4 w-px" />
 
-      {/* Element count */}
       {hasSelection && (
         <>
           <span className="ui-faint ui-nums whitespace-nowrap">
@@ -66,7 +65,6 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         </>
       )}
 
-      {/* Zoom out */}
       <button
         type="button"
         aria-label="Zoom out"
@@ -80,7 +78,6 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         </svg>
       </button>
 
-      {/* Zoom percentage + presets */}
       <label className="ui-faint sr-only" htmlFor="zoom-preset">Zoom level</label>
       <select
         id="zoom-preset"
@@ -97,7 +94,6 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         )}
       </select>
 
-      {/* Zoom in */}
       <button
         type="button"
         aria-label="Zoom in"
@@ -114,7 +110,6 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
 
       <div className="ui-div h-4 w-px" />
 
-      {/* Fit / selection */}
       <button
         type="button"
         title="Zoom to fit (Shift+1)"
@@ -134,7 +129,6 @@ export const ZoomControl = memo(function ZoomControl({ onFit, onFitSelection }: 
         </button>
       )}
 
-      {/* Reset */}
       <button
         type="button"
         title="Reset zoom to 100%"

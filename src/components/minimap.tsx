@@ -12,7 +12,6 @@ interface MinimapProps {
 const W = 172
 const H = 116
 
-/** Scale-aware stroke: thin at minimap scale, never thicker than 1px */
 function strokeWidth(minimapScale: number, elementStroke: number): number {
   return Math.max(0.35, Math.min(1, elementStroke * minimapScale * 1.2))
 }
@@ -28,7 +27,6 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
   const lastDrawRef = useRef(0)
   const [collapsed, setCollapsed] = useState(false)
 
-  // ── World bounds ─────────────────────────────────────────
   const world = useMemo(() => {
     if (elements.length === 0) return { x: -80, y: -80, w: 160, h: 160 }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -43,10 +41,8 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
     return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 }
   }, [elements])
 
-  // ── Layout ───────────────────────────────────────────────
-  const pad = 6 // inner padding within the preview area
+  const pad = 6
 
-  // ── Draw ─────────────────────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -66,11 +62,9 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-    // ── Panel fill (matches the glass bg so edges look seamless) ──
     ctx.fillStyle = isDark ? '#18181b' : '#ffffff'
     ctx.fillRect(0, 0, W, H)
 
-    // ── Preview background ──────────────────────────────────
     ctx.fillStyle = isDark ? '#27272a' : '#f5f5f4'
     ctx.fillRect(0, 0, W, H)
 
@@ -81,7 +75,6 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
     const ox = (W - ww * scale) / 2
     const oy = (H - wh * scale) / 2
 
-    // ── Elements ────────────────────────────────────────────
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
 
@@ -188,7 +181,6 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
       ctx.restore()
     }
 
-    // ── Viewport indicator ──────────────────────────────────
     const vpX = -offsetX / zoom
     const vpY = -offsetY / zoom
     const vpW = window.innerWidth / zoom
@@ -209,8 +201,7 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
   }, [elements, zoom, offsetX, offsetY, world, isDark])
 
   useEffect(() => {
-    // Throttle: pan fires per-pixel and redraw is O(n) — cap at ~15fps
-    // with a trailing draw so the final position always renders.
+
     const now = performance.now()
     const elapsed = now - lastDrawRef.current
     cancelAnimationFrame(rafRef.current)
@@ -228,7 +219,6 @@ export const Minimap = memo(function Minimap({ elements }: MinimapProps): ReactN
     return () => cancelAnimationFrame(rafRef.current)
   }, [draw])
 
-  // ── Click / drag to navigate ────────────────────────────
   const mmToCanvas = useCallback(
     (mmX: number, mmY: number): Point => {
       const { x: wx, y: wy, w: ww, h: wh } = world

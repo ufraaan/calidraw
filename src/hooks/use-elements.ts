@@ -15,10 +15,26 @@ export function useElements() {
   elementsRef.current = elements
 
   useEffect(() => {
+    let cancelled = false
     loadElements()
-      .then(setElements)
-      .catch(() => setElements([]))
-      .finally(() => setLoading(false))
+      .then((els) => {
+        if (cancelled) return
+        setElements((prev) => {
+          if (prev.length === 0) return els
+          const ids = new Set(prev.map((e) => e.id))
+          const extra = els.filter((e) => !ids.has(e.id))
+          return extra.length === 0 ? prev : [...prev, ...extra]
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setElements((prev) => prev)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const upsertElement = useCallback(async (element: Element) => {
@@ -34,7 +50,7 @@ export function useElements() {
     try {
       await saveElement(element)
     } catch {
-      /* IndexedDB full/blocked — keep in-memory state */
+
     }
   }, [])
 
@@ -53,10 +69,10 @@ export function useElements() {
       return next
     })
     try {
-      // Only write dirty elements, not the whole scene.
+
       await saveElements(newElements)
     } catch {
-      /* ignore */
+
     }
   }, [])
 
@@ -65,7 +81,7 @@ export function useElements() {
     try {
       await removeElement(id)
     } catch {
-      /* ignore */
+
     }
   }, [])
 
@@ -76,12 +92,10 @@ export function useElements() {
     try {
       await Promise.all(ids.map(removeElement))
     } catch {
-      /* ignore */
+
     }
   }, [])
 
-  /** Direct replace — used by undo/redo to restore a previous snapshot.
-   * Writes dirty elements and deletes removed ones (no full bulkPut). */
   const replaceElements = useCallback(async (newElements: Element[]) => {
     const prev = elementsRef.current
     const prevIds = new Set(prev.map((e) => e.id))
@@ -92,7 +106,7 @@ export function useElements() {
       if (newElements.length > 0) await saveElements(newElements)
       if (removed.length > 0) await db.elements.bulkDelete(removed)
     } catch {
-      /* ignore */
+
     }
   }, [])
 
@@ -101,8 +115,7 @@ export function useElements() {
     const next = compute(prev)
     if (!next || next === prev) return
     setElements(next)
-    // Order is part of the scene — persist, but only the order-affected ids.
-    // Fire-and-forget; failures keep in-memory order.
+
     saveElements(next).catch(() => {})
   }
 

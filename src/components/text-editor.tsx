@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react'
 import type { MutableRefObject } from 'react'
 import { canvasStore } from '../stores/canvas-store'
 import type { Element } from '../types'
@@ -21,18 +21,43 @@ interface TextEditorProps {
 export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: TextEditorProps): ReactNode {
   const ref = useRef<HTMLTextAreaElement>(null)
   const [value, setValue] = useState(element.text ?? '')
-  // Guard against double-commit (e.g. Cmd+Enter then blur on unmount).
+
   const doneRef = useRef(false)
 
-  // Focus + put cursor at end
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
+    try {
+      el.focus({ preventScroll: true })
+    } catch {
+      el.focus()
+    }
+    try {
+      el.setSelectionRange(el.value.length, el.value.length)
+    } catch {
+
+    }
+    const focus = () => {
+      try {
+        if (document.activeElement !== el) el.focus({ preventScroll: true })
+      } catch {
+        try {
+          el.focus()
+        } catch {
+
+        }
+      }
+    }
+    const raf = requestAnimationFrame(focus)
+    const t0 = window.setTimeout(focus, 0)
+    const t1 = window.setTimeout(focus, 50)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t0)
+      clearTimeout(t1)
+    }
   }, [])
 
-  // Auto-grow the textarea to match content
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -46,9 +71,7 @@ export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: Text
     if (doneRef.current) return
     doneRef.current = true
     if (value.trim()) {
-      // Compute the dimensions from the text content.
-      // We use a shared offscreen canvas to measure so the element
-      // bounding box matches what the renderer will draw.
+
       const s = canvasStore.state
       const fontSize = (element.fontSize ?? 20) * s.zoom
       const font = `${fontSize}px ${element.fontFamily ?? 'sans-serif'}`
@@ -61,15 +84,13 @@ export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: Text
         const m = ctx.measureText(line)
         if (m.width > maxW) maxW = m.width
       }
-      // Divide by zoom to store in canvas-space units
+
       onSave(element.id, value, Math.ceil(maxW / s.zoom), Math.ceil(lines.length * lineHeight / s.zoom))
     } else {
       onCancel()
     }
   }, [value, element, onSave, onCancel])
 
-  // Expose commit to the parent so click-away / tool switches can
-  // save explicitly instead of relying on the blur race.
   useEffect(() => {
     commitRef.current = commit
     return () => {
@@ -85,12 +106,12 @@ export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: Text
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     e.stopPropagation()
+    if (e.nativeEvent) e.nativeEvent.stopImmediatePropagation()
     if (e.key === 'Escape') {
       e.preventDefault()
       cancel()
       return
     }
-    // Plain Enter → save & exit. Shift+Enter → newline.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       commit()
@@ -99,8 +120,7 @@ export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: Text
 
   const s = canvasStore.state
   const fontSize = (element.fontSize ?? 20) * s.zoom
-  // Editor chrome padding — offset the position so the typed text
-  // sits exactly where the canvas renderer will draw it.
+
   const padX = 8
   const padY = 6
 
@@ -111,7 +131,25 @@ export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: Text
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
       onKeyUp={(e) => e.stopPropagation()}
-      onBlur={commit}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={(e) => {
+        const next = e.relatedTarget as HTMLElement | null
+        if (next?.tagName === 'CANVAS' || next?.tagName === 'BODY' || next === null) {
+          requestAnimationFrame(() => {
+            const el = ref.current
+            if (!el || doneRef.current) return
+            if (document.activeElement !== el) {
+              try {
+                el.focus({ preventScroll: true })
+              } catch {
+                el.focus()
+              }
+            }
+          })
+          return
+        }
+        commit()
+      }}
       aria-label="Text element editor. Press Enter to save, Shift Enter for a new line, Escape to cancel."
       className="absolute z-10 overflow-hidden rounded-sm border-0 outline-none"
       style={{
@@ -139,6 +177,7 @@ export function TextEditor({ element, isNew, commitRef, onSave, onCancel }: Text
       spellCheck={false}
       autoComplete="off"
       autoCorrect="off"
+      autoFocus
     />
   )
 }

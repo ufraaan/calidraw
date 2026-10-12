@@ -35,7 +35,6 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
     }
   }, [onClose])
 
-  // Measured flip — keeps the menu on screen regardless of size.
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
@@ -44,7 +43,7 @@ export function ContextMenu({ x, y, onClose, children }: ContextMenuProps) {
       left: Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
     })
-    // Focus first item for keyboard nav.
+
     const first = el.querySelector<HTMLButtonElement>('button:not([disabled])')
     first?.focus()
   }, [x, y])

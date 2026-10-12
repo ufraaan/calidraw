@@ -33,8 +33,7 @@ export function updateDrawing(point: Point): Partial<Element> | null {
   const { startPoint, currentPoint } = drawState
 
   if (state.tool === 'pencil') {
-    // Only add a point if it's far enough from the last one.
-    // This eliminates micro-jitter while preserving the overall shape.
+
     const last = drawState.points[drawState.points.length - 1]
     if (last) {
       const dx = point.x - last.x
@@ -43,8 +42,7 @@ export function updateDrawing(point: Point): Partial<Element> | null {
         drawState.points.push(point)
       }
     }
-    // Always include the live cursor position in the preview
-    // so the stroke doesn't visually lag behind the mouse.
+
     const previewPoints = [...drawState.points, point]
     return {
       type: 'pencil',

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
 import { useSelector } from '@tanstack/react-store'
-import { canvasStore, setSelectedIds, triggerSaveStatus, DEFAULT_LIGHT, DEFAULT_DARK, startColorSchemeListener, subscribeColorScheme, setTheme } from '../stores/canvas-store'
+import { canvasStore, setSelectedIds, setEditingTextId, triggerSaveStatus, DEFAULT_LIGHT, DEFAULT_DARK, startColorSchemeListener, subscribeColorScheme, setTheme } from '../stores/canvas-store'
 import { useElements } from '../hooks/use-elements'
 import {
   useKeyboard,
@@ -18,54 +18,14 @@ import { Minimap } from './minimap'
 import { IconExport, IconImage, IconSunLight, IconMoonDark } from './ui/icons'
 import { IconButton } from './ui/icon-button'
 import { copyToClipboardAsPNG, sceneFromJSON } from '../lib/renderer'
+import { extractImageFiles, computePastePlacement, shiftElement } from '../lib/clipboard'
+import { fileToImageElement, srcToImageElement, extractImageUrlsFromHtml } from '../lib/image'
+import { findTextHit, collectEmptyTextIds } from '../lib/text'
 import { generateId, getNormalizedBounds } from '../lib/geometry'
 import type { ReactNode } from 'react'
 import type { Element } from '../types'
 
 const ExportModal = lazy(() => import('./export-modal').then((m) => ({ default: m.ExportModal })))
-
-function fileToImageElement(file: File): Promise<Element | null> {
-  return new Promise((resolve) => {
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      if (!dataUrl) {
-        resolve(null)
-        return
-      }
-      const img = new Image()
-      img.onload = () => {
-        const s = canvasStore.state
-        const vpCx = (window.innerWidth / 2 - s.offsetX) / s.zoom
-        const vpCy = (window.innerHeight / 2 - s.offsetY) / s.zoom
-        const scale = Math.min(400 / img.width, 400 / img.height, 1)
-        const w = Math.max(1, img.width * scale)
-        const h = Math.max(1, img.height * scale)
-        resolve({
-          id: generateId(),
-          type: 'image',
-          x: vpCx - w / 2,
-          y: vpCy - h / 2,
-          width: w,
-          height: h,
-          angle: 0,
-          strokeColor: 'transparent',
-          backgroundColor: 'transparent',
-          strokeWidth: 0,
-          strokeStyle: 'solid',
-          roughness: 0,
-          bowing: 0,
-          opacity: 100,
-          imageData: dataUrl,
-        })
-      }
-      img.onerror = () => resolve(null)
-      img.src = dataUrl
-    }
-    reader.onerror = () => resolve(null)
-    reader.readAsDataURL(file)
-  })
-}
 
 export function CanvasView(): ReactNode {
   const {
@@ -79,7 +39,6 @@ export function CanvasView(): ReactNode {
   const selectedIds = useSelector(canvasStore, (s) => s.selectedIds)
   useKeyboard()
 
-  // ── Undo / Redo (delta-based: each op records only affected ids) ──
   interface HistoryOp {
     label: string
     undo: () => void
@@ -115,7 +74,6 @@ export function CanvasView(): ReactNode {
     setUndoStack((u) => [...u.slice(-29), op])
   }, [])
 
-  // ── Tracked mutations (record delta inverses, apply without re-recording) ──
   const trackedUpserts = useCallback((afters: Element[], label: string) => {
     if (afters.length === 0) return
     const beforeMap = new Map<string, Element | undefined>()
@@ -182,21 +140,17 @@ export function CanvasView(): ReactNode {
     persistElements(after).catch(() => {})
   }, [pushOp, setElements])
 
-  // ── Context menu state ────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{
     x: number
     y: number
   } | null>(null)
 
-  // ── Export modal state ─────────────────────────────────────
   const [showExport, setShowExport] = useState(false)
 
-  // ── Text editing state ─────────────────────────────────────
-  const [editingTextId, setEditingTextId] = useState<string | null>(null)
+  const editingTextId = useSelector(canvasStore, (s) => s.editingTextId)
   const editingTextEl = editingTextId ? elements.find((e) => e.id === editingTextId) ?? null : null
   const isNewTextEl = editingTextEl ? !editingTextEl.text : false
-  // Latest TextEditor commit — lets click-away save explicitly
-  // instead of relying on the blur-after-unmount race.
+
   const textCommitRef = useRef<(() => void) | null>(null)
 
   const handleTextSave = useCallback(
@@ -211,8 +165,7 @@ export function CanvasView(): ReactNode {
   )
 
   const handleTextCancel = useCallback(() => {
-    // Cancelling a brand-new (still empty) placeholder removes it
-    // silently (no undo entry) so no invisible boxes pile up.
+
     if (editingTextId && isNewTextEl) {
       void deleteElements([editingTextId])
     }
@@ -221,14 +174,13 @@ export function CanvasView(): ReactNode {
 
   const closeCtxMenu = useCallback(() => setCtxMenu(null), [])
 
-  // ── Canvas handlers ───────────────────────────────────────
   const { canvasRef, handlePointerDown, handlePointerMove, handlePointerUp } =
     useCanvas({
       elements,
       editingTextId,
       onElementCreate: (el) => {
         trackedUpserts([el], 'create element')
-        // Auto-enter text editing when a text element is created
+
         if (el.type === 'text') {
           setEditingTextId(el.id)
         }
@@ -238,7 +190,6 @@ export function CanvasView(): ReactNode {
       },
     })
 
-  // ── Color-scheme listener (adapts defaults + migrates elements) ─
   const replaceElementsRef = useRef(replaceElements)
   replaceElementsRef.current = replaceElements
 
@@ -263,8 +214,14 @@ export function CanvasView(): ReactNode {
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       closeCtxMenu()
-      // Click outside the text editor — commit first. The click is
-      // consumed so it never plants a second placeholder underneath.
+
+      const st = canvasStore.state
+      pasteAnchorRef.current = {
+        x: (e.clientX - st.offsetX) / st.zoom,
+        y: (e.clientY - st.offsetY) / st.zoom,
+      }
+      pasteCascadeRef.current = 0
+
       if (editingTextId) {
         textCommitRef.current?.()
         setEditingTextId(null)
@@ -275,33 +232,18 @@ export function CanvasView(): ReactNode {
     [handlePointerDown, closeCtxMenu, editingTextId],
   )
 
-  // ── Double-click → text editing ────────────────────────────
-  // Only real (non-empty) text opens; stray empty placeholders
-  // left by the two clicks are garbage-collected silently.
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const empties = elementsRef.current
-        .filter((el) => el.type === 'text' && !el.text)
-        .map((el) => el.id)
+      const empties = collectEmptyTextIds(elementsRef.current)
       if (empties.length > 0) {
         void deleteElements(empties)
       }
 
       const s = canvasStore.state
-      const cx = (e.clientX - s.offsetX) / s.zoom
-      const cy = (e.clientY - s.offsetY) / s.zoom
-
-      // Find a text element under the cursor (topmost first)
-      let hit: Element | undefined
-      for (let i = elements.length - 1; i >= 0; i--) {
-        const el = elements[i]
-        if (el.type !== 'text' || !el.text) continue
-        const b = getNormalizedBounds(el)
-        if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) {
-          hit = el
-          break
-        }
-      }
+      const hit = findTextHit(elements, {
+        x: (e.clientX - s.offsetX) / s.zoom,
+        y: (e.clientY - s.offsetY) / s.zoom,
+      })
 
       if (hit) {
         setEditingTextId(hit.id)
@@ -311,7 +253,6 @@ export function CanvasView(): ReactNode {
     [elements, deleteElements],
   )
 
-  // ── Right-click → context menu ────────────────────────────
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       e.preventDefault()
@@ -338,12 +279,14 @@ export function CanvasView(): ReactNode {
         setSelectedIds([])
       }
 
+      pasteAnchorRef.current = { x: cx, y: cy }
+      pasteCascadeRef.current = 0
+
       setCtxMenu({ x: e.clientX, y: e.clientY })
     },
     [elements, selectedIds],
   )
 
-  // ── Clipboard actions ─────────────────────────────────────
   const handleCopy = useCallback(() => {
     if (selectedIds.length === 0) return
     const sel = elements.filter((e) => selectedIds.includes(e.id))
@@ -359,19 +302,17 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [elements, selectedIds, trackedDeletes, closeCtxMenu])
 
+  const pasteAnchorRef = useRef<{ x: number; y: number } | null>(null)
+  const pasteCascadeRef = useRef(0)
+
   const handlePaste = useCallback(() => {
     if (clipboardElements.length === 0) return
-    const s = canvasStore.state
-    const cx = (window.innerWidth / 2 - s.offsetX) / s.zoom
-    const cy = (window.innerHeight / 2 - s.offsetY) / s.zoom
-
-    const pasted = clipboardElements.map((el, i) => ({
-      ...el,
-      id: generateId(),
-      x: el.x + cx - 50 + i * 20,
-      y: el.y + cy - 50 + i * 20,
-    }))
-    trackedUpserts(pasted, 'paste')
+    const step = pasteCascadeRef.current * 16
+    pasteCascadeRef.current += 1
+    trackedUpserts(
+      computePastePlacement(clipboardElements, pasteAnchorRef.current, step),
+      'paste',
+    )
     closeCtxMenu()
   }, [closeCtxMenu, trackedUpserts])
 
@@ -392,10 +333,8 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [elements, selectedIds, closeCtxMenu])
 
-  // ── Copy / Paste style state ─────────────────────────────
   const [copiedStyle, setCopiedStyle] = useState<Partial<Element> | null>(null)
 
-  // ── Select all, duplicate, nudge ─────────────────────────
   const handleSelectAll = useCallback(() => {
     setSelectedIds(elements.map((e) => e.id))
   }, [elements])
@@ -404,12 +343,7 @@ export function CanvasView(): ReactNode {
     if (selectedIds.length === 0) return
     const dups = elements
       .filter((e) => selectedIds.includes(e.id))
-      .map((e) => ({
-        ...e,
-        id: generateId(),
-        x: e.x + 20,
-        y: e.y + 20,
-      }))
+      .map((e) => ({ ...shiftElement(e, 20, 20), id: generateId() }))
     trackedUpserts(dups, 'duplicate')
   }, [elements, selectedIds, trackedUpserts])
 
@@ -418,7 +352,7 @@ export function CanvasView(): ReactNode {
       if (selectedIds.length === 0) return
       const nudged = elements
         .filter((e) => selectedIds.includes(e.id))
-        .map((e) => ({ ...e, x: e.x + dx, y: e.y + dy }))
+        .map((e) => shiftElement(e, dx, dy))
       trackedUpserts(nudged, 'nudge')
     },
     [elements, selectedIds, trackedUpserts],
@@ -469,32 +403,57 @@ export function CanvasView(): ReactNode {
     handleOpenExport,
   ])
 
-  // ── Image insert helper ───────────────────────────────────
+  const imagePlacement = useCallback(() => {
+    const s = canvasStore.state
+    return {
+      offsetX: s.offsetX,
+      offsetY: s.offsetY,
+      zoom: s.zoom,
+      viewW: window.innerWidth,
+      viewH: window.innerHeight,
+      anchorX: pasteAnchorRef.current?.x,
+      anchorY: pasteAnchorRef.current?.y,
+    }
+  }, [])
+
   const insertImageFile = useCallback(async (file: File) => {
-    const el = await fileToImageElement(file)
+    const el = await fileToImageElement(file, imagePlacement())
     if (!el) return
     trackedUpserts([el], 'insert image')
-  }, [trackedUpserts])
+  }, [trackedUpserts, imagePlacement])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // ── Clipboard paste (images) on window + JSON scene ───────
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      const items = e.clipboardData?.items
-      if (items) {
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i]
-          if (item.type.startsWith('image/')) {
-            e.preventDefault()
-            const file = item.getAsFile()
-            if (file) void insertImageFile(file)
-            return
-          }
-        }
+
+      const images = extractImageFiles(e.clipboardData)
+      if (images.length > 0) {
+        e.preventDefault()
+        images.forEach((file) => void insertImageFile(file))
+        return
       }
+
+      const html = e.clipboardData?.getData('text/html') ?? ''
+      const htmlSrcs = extractImageUrlsFromHtml(html)
+      if (htmlSrcs.length > 0) {
+        e.preventDefault()
+        htmlSrcs.forEach((src) => {
+          void srcToImageElement(src, imagePlacement()).then((el) => {
+            if (el) trackedUpserts([el], 'insert image')
+          })
+        })
+        return
+      }
+
+      if (clipboardElements.length > 0) {
+        e.preventDefault()
+        handlePaste()
+        return
+      }
+
       const text = e.clipboardData?.getData('text/plain')
       if (text && text.includes('calidraw-scene')) {
         const els = sceneFromJSON(text)
@@ -506,16 +465,14 @@ export function CanvasView(): ReactNode {
       }
     }
 
-    window.addEventListener('paste', onPaste)
-    return () => window.removeEventListener('paste', onPaste)
-  }, [insertImageFile, trackedUpserts])
+    window.addEventListener('paste', onPaste, true)
+    return () => window.removeEventListener('paste', onPaste, true)
+  }, [insertImageFile, trackedUpserts, handlePaste, imagePlacement])
 
-  // ── Save status tracking ──────────────────────────────────
   useEffect(() => {
     if (elements.length > 0) triggerSaveStatus()
   }, [elements])
 
-  // ── Context menu actions ──────────────────────────────────
   const selectedElement =
     selectedIds.length === 1
       ? elements.find((e) => e.id === selectedIds[0]) ?? null
@@ -544,7 +501,7 @@ export function CanvasView(): ReactNode {
       }
       trackedUpserts([newEl], 'flip horizontal')
     } else {
-      // Multi-select: mirror around collective center.
+
       const sel = elements.filter((e) => selectedIds.includes(e.id))
       let minX = Infinity, maxX = -Infinity
       for (const e of sel) {
@@ -555,7 +512,7 @@ export function CanvasView(): ReactNode {
       const cx = (minX + maxX) / 2
       trackedUpserts(sel.map((el) => {
         const b = getNormalizedBounds(el)
-        const nx = cx + (cx - (b.x + b.w)) // mirrored left edge
+        const nx = cx + (cx - (b.x + b.w))
         const base = { ...el, x: nx, width: Math.abs(el.width) as number }
         if (base.points) {
           base.points = base.points.map((pt) => ({ x: cx + (cx - pt.x), y: pt.y }))
@@ -605,7 +562,6 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [selectedElement, elements, selectedIds, trackedUpserts, closeCtxMenu])
 
-  // Multi-select z-order: move all selected preserving relative order.
   const bringSelectedToFront = useCallback(() => {
     if (selectedIds.length < 2) return
     const selSet = new Set(selectedIds)
@@ -626,7 +582,6 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [selectedIds, trackedReorder, closeCtxMenu])
 
-  // Single-element z-order via the same reorder path (undoable).
   const bringToFrontTracked = useCallback((id: string) => {
     trackedReorder((prev) => {
       const idx = prev.findIndex((e) => e.id === id)
@@ -679,7 +634,6 @@ export function CanvasView(): ReactNode {
   const hasMultiSel = selectedIds.length > 1
   const hasThreePlus = selectedIds.length > 2
 
-  // ── Copy / Paste style ───────────────────────────────────
   const handleCopyStyle = useCallback(() => {
     if (!selectedElement) return
     setCopiedStyle({
@@ -703,7 +657,6 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [copiedStyle, hasSelection, elements, selectedIds, trackedUpserts, closeCtxMenu])
 
-  // ── Alignment handlers (dirty-only writes) ────────────────
   const alignLeft = useCallback(() => {
     if (!multiSelectedElements) return
     const minX = Math.min(...multiSelectedElements.map((e) => getNormalizedBounds(e).x))
@@ -760,7 +713,6 @@ export function CanvasView(): ReactNode {
     closeCtxMenu()
   }, [multiSelectedElements, trackedUpserts, closeCtxMenu])
 
-  // ── Distribute handlers (dirty-only writes) ────────────────
   const distributeHorizontally = useCallback(() => {
     if (!multiSelectedElements || selectedIds.length < 3) return
     const sel = [...multiSelectedElements].sort((a, b) => {
@@ -854,7 +806,6 @@ export function CanvasView(): ReactNode {
         onTouchEnd={handleTouchEnd}
       />
 
-      {/* Text editing overlay */}
       {editingTextEl && (
         <TextEditor
           element={editingTextEl}
@@ -865,7 +816,6 @@ export function CanvasView(): ReactNode {
         />
       )}
 
-      {/* Top-left actions: export, image, theme */}
       <div className="ui-panel pointer-events-auto absolute left-4 top-4 flex items-center gap-0.5 p-2">
         <IconButton
           onClick={() => setShowExport(true)}
@@ -903,7 +853,6 @@ export function CanvasView(): ReactNode {
         />
       </div>
 
-      {/* Empty canvas hint — quiet invitation, never blocks input */}
       {elements.length === 0 && !editingTextEl && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="ui-faint flex items-center gap-2 text-center">
@@ -919,7 +868,6 @@ export function CanvasView(): ReactNode {
       <Toolbar elements={elements} onElementUpdate={(el) => trackedUpserts([el], 'edit style')} onElementsUpdate={(els) => trackedUpserts(els, 'edit style')} />
       <ZoomControl onFit={handleZoomFit} onFitSelection={handleZoomSelection} />
 
-      {/* Export Modal */}
       {showExport && (
         <Suspense fallback={null}>
           <ExportModal
@@ -930,7 +878,6 @@ export function CanvasView(): ReactNode {
         </Suspense>
       )}
 
-      {/* Context Menu */}
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={closeCtxMenu}>
           <MenuItem onClick={flipHorizontal} disabled={!hasSelection} shortcut="⇋">
@@ -987,7 +934,6 @@ export function CanvasView(): ReactNode {
           </MenuItem>
           <MenuSeparator />
 
-          {/* Alignment */}
           <MenuItem onClick={alignLeft} disabled={!hasMultiSel}>
             <AlignLeftIcon /> Align left
           </MenuItem>
@@ -1008,7 +954,6 @@ export function CanvasView(): ReactNode {
           </MenuItem>
           <MenuSeparator />
 
-          {/* Distribute */}
           <MenuItem onClick={distributeHorizontally} disabled={!hasThreePlus}>
             <DistributeHIcon /> Distribute horizontally
           </MenuItem>
@@ -1051,7 +996,6 @@ export function CanvasView(): ReactNode {
   )
 }
 
-// ── Simple SVG icons for the context menu ──────────────────
 function FlipHIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1144,7 +1088,6 @@ function PasteStyleIcon() {
   )
 }
 
-// ── Alignment icons ────────────────────────────────────────
 function AlignLeftIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -23,16 +23,19 @@ export interface CanvasState {
   isDark: boolean
   selectedIds: string[]
   saveStatus: SaveStatus
+
+  editingTextId: string | null
 }
 
 const POV_KEY = 'calidraw-pov'
+const THEME_KEY = 'calidraw-theme'
 
 function loadPOV(): { zoom: number; offsetX: number; offsetY: number } | null {
   try {
     const raw = localStorage.getItem(POV_KEY)
     if (raw) return JSON.parse(raw)
   } catch {
-    /* ignore */
+
   }
   return null
 }
@@ -41,9 +44,20 @@ const saved = loadPOV()
 
 function detectDarkMode(): boolean {
   try {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved === 'dark') return true
+    if (saved === 'light') return false
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   } catch {
     return false
+  }
+}
+
+function applyThemeClass(isDark: boolean) {
+  try {
+    document.documentElement.classList.toggle('dark', isDark)
+  } catch {
+
   }
 }
 
@@ -64,6 +78,7 @@ const initialState: CanvasState = {
   isDark: detectDarkMode(),
   selectedIds: [],
   saveStatus: 'idle',
+  editingTextId: null,
 }
 
 export const canvasStore = createStore(initialState)
@@ -71,7 +86,7 @@ export const canvasStore = createStore(initialState)
 let povTimer: ReturnType<typeof setTimeout> | null = null
 
 function savePOV() {
-  // Debounced — pan/zoom fire dozens of events/sec, localStorage is sync.
+
   if (povTimer) return
   povTimer = setTimeout(() => {
     povTimer = null
@@ -82,7 +97,7 @@ function savePOV() {
         JSON.stringify({ zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY }),
       )
     } catch {
-      /* quota / private mode — ignore */
+
     }
   }, 500)
 }
@@ -99,7 +114,7 @@ export function flushPOV() {
       JSON.stringify({ zoom: s.zoom, offsetX: s.offsetX, offsetY: s.offsetY }),
     )
   } catch {
-    /* ignore */
+
   }
 }
 
@@ -164,27 +179,39 @@ export function setFontFamily(fontFamily: string) {
 }
 
 export function setTheme(isDark: boolean) {
+  try {
+    localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light')
+  } catch {
+
+  }
+  applyThemeClass(isDark)
   canvasStore.setState((s) => ({
     ...s,
     isDark,
     strokeColor: isDark ? DEFAULT_DARK : DEFAULT_LIGHT,
   }))
+
+  try {
+    colorSchemeSubscriber?.(isDark)
+  } catch {
+
+  }
 }
+
+applyThemeClass(detectDarkMode())
 
 export function setSelectedIds(ids: string[]) {
   canvasStore.setState((s) => ({ ...s, selectedIds: ids }))
 }
 
-// ── Color scheme (dark/light) listener ────────────────────────
+export function setEditingTextId(id: string | null) {
+  canvasStore.setState((s) => (s.editingTextId === id ? s : { ...s, editingTextId: id }))
+}
+
 type ColorSchemeCallback = (isDark: boolean) => void
 let colorSchemeSubscriber: ColorSchemeCallback | null = null
 let colorSchemeCleanup: (() => void) | null = null
 
-/**
- * Subscribe to color-scheme changes. Returns unsubscribe.
- * The callback fires on each change; the store's `strokeColor` is
- * also updated automatically to the appropriate default.
- */
 export function subscribeColorScheme(cb: ColorSchemeCallback): () => void {
   colorSchemeSubscriber = cb
   return () => {
@@ -192,13 +219,19 @@ export function subscribeColorScheme(cb: ColorSchemeCallback): () => void {
   }
 }
 
-/** Start listening for `prefers-color-scheme` changes. Call once on mount. */
 export function startColorSchemeListener(): () => void {
-  if (colorSchemeCleanup) return colorSchemeCleanup // already started
+  if (colorSchemeCleanup) return colorSchemeCleanup
 
   const mq = window.matchMedia('(prefers-color-scheme: dark)')
   const handler = (e: MediaQueryListEvent) => {
+
+    try {
+      if (localStorage.getItem(THEME_KEY)) return
+    } catch {
+
+    }
     const isDark = e.matches
+    applyThemeClass(isDark)
     canvasStore.setState((s) => ({
       ...s,
       isDark,
@@ -211,18 +244,17 @@ export function startColorSchemeListener(): () => void {
   return colorSchemeCleanup
 }
 
-// ── Smooth zoom animation ────────────────────────────────────
 let zoomAnimation: number | null = null
 
 export function animateZoom(targetZoom: number, cx?: number, cy?: number) {
-  // Respect reduced motion — jump immediately.
+
   try {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       zoomAtPoint(Math.max(0.1, Math.min(5, targetZoom)), cx, cy)
       return
     }
   } catch {
-    /* ignore */
+
   }
   const startZoom = canvasStore.state.zoom
   const clampedTarget = Math.max(0.1, Math.min(5, targetZoom))
@@ -233,7 +265,7 @@ export function animateZoom(targetZoom: number, cx?: number, cy?: number) {
 
   function animate(time: number) {
     const t = Math.min((time - startTime) / duration, 1)
-    const ease = 1 - Math.pow(1 - t, 3) // ease-out cubic
+    const ease = 1 - Math.pow(1 - t, 3)
     const currentZoom = startZoom + (clampedTarget - startZoom) * ease
     zoomAtPoint(currentZoom, cx, cy)
 
@@ -247,7 +279,6 @@ export function animateZoom(targetZoom: number, cx?: number, cy?: number) {
   zoomAnimation = requestAnimationFrame(animate)
 }
 
-// ── Auto-save indicator ──────────────────────────────────────
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
 
 export function triggerSaveStatus() {
